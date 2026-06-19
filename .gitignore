@@ -7,22 +7,52 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-.output
-.vinxi
-.tanstack/**
-.nitro
-*.local
+# =========================
+# Frontend
+# =========================
+apps/frontend/node_modules/
+apps/frontend/dist/
+apps/frontend/dist-ssr/
+apps/frontend/.output/
+apps/frontend/.vinxi/
+apps/frontend/.tanstack/**
+apps/frontend/.nitro/
+apps/frontend/.wrangler/
 
-# Wrangler / Cloudflare
+# Legacy root-level (safety net during migration)
+node_modules/
+dist/
+dist-ssr/
+.output/
+.vinxi/
+.tanstack/**
+.nitro/
 .wrangler/
+
+# =========================
+# Backend
+# =========================
+apps/backend/venv/
+apps/backend/__pycache__/
+apps/backend/app/__pycache__/
+apps/backend/**/__pycache__/
+apps/backend/*.pyc
+apps/backend/.env
+apps/backend/*.egg-info/
+
+# =========================
+# Environment & Secrets
+# =========================
+*.local
+.env
 .dev.vars
 
-# Editor directories and files
+# =========================
+# Editor & IDE
+# =========================
 .vscode/*
 !.vscode/extensions.json
+!.vscode/tasks.json
 .idea
 .DS_Store
 *.suo
@@ -30,3 +60,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# =========================
+# OS
+# =========================
+Thumbs.db
+Desktop.ini
