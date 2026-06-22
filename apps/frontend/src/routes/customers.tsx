@@ -2,6 +2,7 @@ import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { LayoutGrid, List, Search, ArrowRight, X, Building2, Plus, ChevronRight, Check } from "lucide-react";
 import { toast } from "sonner";
+import { format } from "date-fns";
 import { AppShell } from "@/components/app-shell";
 import { useRoleContext } from "@/lib/role-context";
 import { type Client } from "@/lib/mock-data";
@@ -151,31 +152,60 @@ function CustomersPage() {
 }
 
 // ---------- New Client onboarding (stepper) ----------
+interface ContactEntry { name: string; email: string; phone: string; designation: string; }
 interface NewClientState {
-  name: string; company: string; industry: string; contact: string;
-  email: string; phone: string; address: string; businessType: string; notes: string;
+  clientName: string; companyName: string; customerId: string;
+  companyOwner: string; engagementManager: string; phoneNumber: string; city: string; country: string;
+  industry: string; businessType: string;
+  createdAt: string; createdBy: string;
+  panNumber: string; gstNumber: string; msmeNumber: string;
+  contacts: ContactEntry[];
+  notes: string;
 }
 
 function NewClientModal({ onClose }: { onClose: () => void }) {
+  const { user } = useRoleContext();
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
-  const [s, setS] = useState<NewClientState>({
-    name: "", company: "", industry: "", contact: "", email: "", phone: "",
-    address: "", businessType: "Enterprise", notes: "",
-  });
-  const u = (k: keyof NewClientState, v: string) => setS((p) => ({ ...p, [k]: v }));
+  const [s, setS] = useState<NewClientState>(() => ({
+    clientName: "", companyName: "",
+    customerId: `CUST-${Date.now().toString().slice(-6)}`,
+    companyOwner: "", engagementManager: "", phoneNumber: "", city: "", country: "",
+    industry: "", businessType: "Enterprise",
+    createdAt: new Date().toISOString(),
+    createdBy: user?.name ?? "Unknown",
+    panNumber: "", gstNumber: "", msmeNumber: "",
+    contacts: [{ name: "", email: "", phone: "", designation: "" }],
+    notes: "",
+  }));
+  const u = (k: keyof Omit<NewClientState, "contacts">, v: string) => setS((p) => ({ ...p, [k]: v }));
+
+  const MAX_CONTACTS = 3;
+  const addContact = () =>
+    setS((p) => p.contacts.length >= MAX_CONTACTS ? p : { ...p, contacts: [...p.contacts, { name: "", email: "", phone: "", designation: "" }] });
+
+  const removeContact = (idx: number) =>
+    setS((p) => ({ ...p, contacts: p.contacts.filter((_, i) => i !== idx) }));
+
+  const updateContact = (idx: number, field: keyof ContactEntry, val: string) =>
+    setS((p) => {
+      const updated = p.contacts.map((c, i) => i === idx ? { ...c, [field]: val } : c);
+      return { ...p, contacts: updated };
+    });
 
   const stepValid = () => {
-    if (step === 1) return s.name.trim() && s.company.trim() && s.industry.trim();
-    if (step === 2) return s.email.trim() && s.contact.trim();
+    if (step === 1) return s.clientName.trim() && s.companyName.trim() && s.companyOwner.trim() && s.industry.trim();
+    if (step === 2) return s.contacts.every((c) => c.name.trim() && c.email.trim());
     return true;
   };
+
+  const readOnlyCls = cn(inputCls, "bg-muted text-muted-foreground cursor-not-allowed");
 
   const submit = () => {
     setSubmitting(true);
     setTimeout(() => {
-      dhStore.addClient({ name: s.name, industry: s.industry || "Other", contact: s.email });
-      toast.success("Client onboarded", { description: `${s.name} added to your directory.` });
+      dhStore.addClient({ name: s.clientName || s.companyName, industry: s.industry || "Other", contact: s.contacts[0]?.email ?? "" });
+      toast.success("Client onboarded", { description: `${s.clientName} added to your directory.` });
       setSubmitting(false);
       onClose();
     }, 500);
@@ -190,7 +220,7 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
             <div key={label} className="flex items-center gap-2">
               <div className={cn("flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold",
                 done ? "border-success bg-success text-success-foreground"
-                : active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground")}>
+                  : active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground")}>
                 {done ? <Check className="h-3 w-3" /> : n}
               </div>
               <span className={cn("font-medium", active ? "text-foreground" : "text-muted-foreground")}>{label}</span>
@@ -202,8 +232,14 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
 
       {step === 1 && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Client Name" required><input className={inputCls} value={s.name} onChange={(e) => u("name", e.target.value)} /></Field>
-          <Field label="Company Name" required><input className={inputCls} value={s.company} onChange={(e) => u("company", e.target.value)} /></Field>
+          <Field label="TK Customer" required><input className={inputCls} value={s.clientName} onChange={(e) => u("clientName", e.target.value)} /></Field>
+          <Field label="End Customer Name / Sub-venture Name" required><input className={inputCls} value={s.companyName} onChange={(e) => u("companyName", e.target.value)} /></Field>
+          <Field label="Customer ID"><input className={readOnlyCls} value={s.customerId} readOnly /></Field>
+          <Field label="Company Owner" required><input className={inputCls} value={s.companyOwner} onChange={(e) => u("companyOwner", e.target.value)} /></Field>
+          <Field label="Engagement Manager"><input className={inputCls} value={s.engagementManager} onChange={(e) => u("engagementManager", e.target.value)} /></Field>
+          <Field label="Phone Number"><input className={inputCls} value={s.phoneNumber} onChange={(e) => u("phoneNumber", e.target.value)} /></Field>
+          <Field label="City"><input className={inputCls} value={s.city} onChange={(e) => u("city", e.target.value)} /></Field>
+          <Field label="Country / Region"><input className={inputCls} value={s.country} onChange={(e) => u("country", e.target.value)} /></Field>
           <Field label="Industry" required>
             <select className={inputCls} value={s.industry} onChange={(e) => u("industry", e.target.value)}>
               <option value="">Select industry</option>
@@ -215,18 +251,99 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
               {["Enterprise", "Mid-Market", "SMB", "Public Sector"].map((o) => <option key={o}>{o}</option>)}
             </select>
           </Field>
-          <Field label="Address" className="sm:col-span-2">
-            <textarea rows={2} className={cn(inputCls, "py-2")} value={s.address} onChange={(e) => u("address", e.target.value)} />
-          </Field>
+          <Field label="Created At"><input className={readOnlyCls} value={format(new Date(s.createdAt), "dd MMM yyyy, HH:mm")} readOnly /></Field>
+          <Field label="Created By"><input className={readOnlyCls} value={s.createdBy} readOnly /></Field>
         </div>
       )}
 
       {step === 2 && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Contact Person" required><input className={inputCls} value={s.contact} onChange={(e) => u("contact", e.target.value)} /></Field>
-          <Field label="Email" required><input type="email" className={inputCls} value={s.email} onChange={(e) => u("email", e.target.value)} /></Field>
-          <Field label="Phone"><input className={inputCls} value={s.phone} onChange={(e) => u("phone", e.target.value)} /></Field>
-          <Field label="Notes" className="sm:col-span-2">
+        <div className="space-y-3">
+          {s.contacts.map((ct, idx) => (
+            <div key={idx} className="rounded-lg border border-border bg-background p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Contact {s.contacts.length > 1 ? `${idx + 1}` : "Person"}
+                </span>
+                {idx > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => removeContact(idx)}
+                    className="inline-flex items-center gap-1 rounded-md border border-input bg-card px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" /> Remove
+                  </button>
+                )}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Contact Person" required>
+                  <input
+                    className={inputCls}
+                    value={ct.name}
+                    onChange={(e) => updateContact(idx, "name", e.target.value)}
+                  />
+                </Field>
+                <Field label="Email" required>
+                  <input
+                    type="email"
+                    className={inputCls}
+                    value={ct.email}
+                    onChange={(e) => updateContact(idx, "email", e.target.value)}
+                  />
+                </Field>
+                <Field label="Phone">
+                  <input
+                    className={inputCls}
+                    value={ct.phone}
+                    onChange={(e) => updateContact(idx, "phone", e.target.value)}
+                  />
+                </Field>
+                <Field label="Designation">
+                  <input
+                    className={inputCls}
+                    value={ct.designation}
+                    onChange={(e) => updateContact(idx, "designation", e.target.value)}
+                  />
+                </Field>
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={addContact}
+                  disabled={s.contacts.length >= MAX_CONTACTS}
+                  className="inline-flex items-center gap-1 rounded-md border border-input bg-card px-2.5 py-1 text-xs hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Plus className="h-3 w-3" /> Add
+                </button>
+                {s.contacts.length >= MAX_CONTACTS && (
+                  <span className="text-[11px] text-muted-foreground">Maximum of 3 contacts</span>
+                )}
+              </div>
+            </div>
+          ))}
+          <div className="grid gap-3 sm:grid-cols-2 mt-4 pt-4 border-t border-border">
+            <Field label="Company PAN Number">
+              <input
+                className={inputCls}
+                value={s.panNumber}
+                onChange={(e) => u("panNumber", e.target.value)}
+              />
+            </Field>
+            <Field label="GST Registration Number">
+              <input
+                className={inputCls}
+                value={s.gstNumber}
+                onChange={(e) => u("gstNumber", e.target.value)}
+              />
+            </Field>
+            <Field label="MSME Registration Number" className="sm:col-span-2">
+              <input
+                className={inputCls}
+                value={s.msmeNumber}
+                onChange={(e) => u("msmeNumber", e.target.value)}
+              />
+            </Field>
+          </div>
+          <Field label="Notes" className="pt-1">
             <textarea rows={3} className={cn(inputCls, "py-2")} value={s.notes} onChange={(e) => u("notes", e.target.value)} />
           </Field>
         </div>
@@ -236,15 +353,39 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
         <div className="rounded-lg border border-border bg-accent/20 p-4">
           <h4 className="mb-3 text-sm font-semibold">Client Summary</h4>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-            <Row label="Client" v={s.name} />
-            <Row label="Company" v={s.company} />
+            <Row label="Client Name" v={s.clientName} />
+            <Row label="Company Name" v={s.companyName} />
+            <Row label="Customer ID" v={s.customerId} />
+            <Row label="Company Owner" v={s.companyOwner} />
+            <Row label="Engagement Manager" v={s.engagementManager || "—"} />
+            <Row label="Phone Number" v={s.phoneNumber || "—"} />
+            <Row label="City" v={s.city || "—"} />
+            <Row label="Country / Region" v={s.country || "—"} />
             <Row label="Industry" v={s.industry} />
             <Row label="Business Type" v={s.businessType} />
-            <Row label="Contact" v={s.contact} />
-            <Row label="Email" v={s.email} />
-            <Row label="Phone" v={s.phone || "—"} />
-            <Row label="Address" v={s.address || "—"} />
+            <Row label="Created At" v={format(new Date(s.createdAt), "dd MMM yyyy, HH:mm")} />
+            <Row label="Created By" v={s.createdBy} />
+            <Row label="Company PAN Number" v={s.panNumber || "—"} />
+            <Row label="GST Registration Number" v={s.gstNumber || "—"} />
+            <Row label="MSME Registration Number" v={s.msmeNumber || "—"} />
           </dl>
+          <div className="mt-3 space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Contacts</p>
+            {s.contacts.map((ct, idx) => (
+              <dl key={idx} className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md border border-border bg-card px-3 py-2 text-xs">
+                <Row label="Name" v={ct.name} />
+                <Row label="Email" v={ct.email} />
+                <Row label="Phone" v={ct.phone || "—"} />
+                <Row label="Designation" v={ct.designation || "—"} />
+              </dl>
+            ))}
+          </div>
+          {s.notes && (
+            <div className="mt-3">
+              <p className="text-xs font-medium text-muted-foreground">Notes</p>
+              <p className="mt-0.5 text-xs">{s.notes}</p>
+            </div>
+          )}
         </div>
       )}
 
