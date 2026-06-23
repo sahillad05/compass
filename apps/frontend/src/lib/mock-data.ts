@@ -87,7 +87,7 @@ export interface WBSDetails {
   };
 }
 
-export type WbsStatus = "draft" | "approval_pending" | "ph_approved" | "accounts_approved" | "approved" | "started";
+export type WbsStatus = "draft" | "approval_pending" | "ph_approved" | "accounts_approved" | "approved" | "started" | "assigned";
 
 export interface Project {
   id: string;

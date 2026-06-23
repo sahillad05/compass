@@ -156,7 +156,6 @@ function WbsNewProjectPage() {
 
   // ── Header fields ──
   const [projectName, setProjectName] = useState("");
-  const [issuedDate, setIssuedDate] = useState("");
   const projectId = "PRJ-" + new Date().getFullYear() + "-" + String(Math.floor(Math.random() * 99999)).padStart(5, "0");
   const [contractType, setContractType] = useState("");
   const [engagementManager, setEngagementManager] = useState("");
@@ -203,11 +202,8 @@ function WbsNewProjectPage() {
   const [sectionAComments, setSectionAComments] = useState("");
   const [sectionBComments, setSectionBComments] = useState("");
 
-  // ── Approval modal ──
-  const [approveModalOpen, setApproveModalOpen] = useState(false);
-  const [rejectModalOpen, setRejectModalOpen] = useState(false);
-  const [approveRemarks, setApproveRemarks] = useState("");
-  const [rejectReason, setRejectReason] = useState("");
+  // ── PO File ──
+  const [poFile, setPoFile] = useState<File | null>(null);
 
   // ── Computed totals ──
   const subtotal = serviceRows.reduce((s, r) => s + r.total, 0);
@@ -292,8 +288,12 @@ function WbsNewProjectPage() {
 
   function onBillingModelChange(model: string) {
     setBillingModel(model);
-    const terms = PAYMENT_TERMS_MAP[model];
-    setPaymentTerms(terms ? terms[0] : "");
+    if (model === "Custom") {
+      setPaymentTerms("");
+    } else {
+      const terms = PAYMENT_TERMS_MAP[model];
+      setPaymentTerms(terms ? terms[0] : "");
+    }
     // Build invoice rows from template
     const template = INVOICE_TEMPLATES[model];
     if (!template) { setInvoiceRows([]); return; }
@@ -360,7 +360,7 @@ function WbsNewProjectPage() {
     const proj = dhStore.addProject({
       name: projectName, clientId: selectedClientId,
       description: sectionAComments,
-      startDate: issuedDate || new Date().toISOString().slice(0, 10),
+      startDate: new Date().toISOString().slice(0, 10),
       endDate: projectIssuedDate || new Date(Date.now() + 86400000 * 90).toISOString().slice(0, 10),
       budget: subtotal,
       wbsStatus: "draft", wbsSubStatus: "Draft",
@@ -373,26 +373,23 @@ function WbsNewProjectPage() {
     navigate({ to: "/projects/$projectId", params: { projectId: proj.id } });
   }
 
-  function handleSendForApproval() {
+  function handleAssignWbs() {
     if (!projectName.trim()) { toast.error("Project Name is required"); return; }
     if (!selectedClientId) { toast.error("Please select a client"); return; }
     if (serviceRows.length === 0) { toast.error("Please add at least one service"); return; }
     const proj = dhStore.addProject({
       name: projectName, clientId: selectedClientId,
       description: sectionAComments,
-      startDate: issuedDate || new Date().toISOString().slice(0, 10),
+      startDate: new Date().toISOString().slice(0, 10),
       endDate: projectIssuedDate || new Date(Date.now() + 86400000 * 90).toISOString().slice(0, 10),
       budget: subtotal,
-      wbsStatus: "approval_pending", wbsSubStatus: "WBS Approval Pending",
+      wbsStatus: "assigned", wbsSubStatus: "WBS Assigned",
       engagementManager, salesPerson, contractType, projectType,
       projectIssuedDate, currency, taxPercent, totalHours, totalDays,
       invoiceValue: invoiceTarget, sectionAComments, sectionBComments,
       wbsDetails: buildWbsDetails(),
     });
-    setStepperStep(1);
-    toast.success("Sent for Approval", {
-      description: "WBS sent to HOD and Approval Authority. Status: WBS Approval Pending.",
-    });
+    toast.success("WBS Assigned");
     navigate({ to: "/projects/$projectId", params: { projectId: proj.id } });
   }
 
@@ -487,9 +484,6 @@ function WbsNewProjectPage() {
             <FormGroup label="Project Name" required locked={!adminMode}>
               <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} readOnly={!adminMode} style={inputStyle(!adminMode)} />
             </FormGroup>
-            <FormGroup label="Issued Date" required locked={!adminMode}>
-              <input type="date" value={issuedDate} onChange={(e) => setIssuedDate(e.target.value)} readOnly={!adminMode} style={inputStyle(!adminMode)} />
-            </FormGroup>
             <FormGroup label="Project ID (Auto)">
               <input type="text" value={projectId} readOnly style={inputStyle(true)} />
             </FormGroup>
@@ -528,14 +522,14 @@ function WbsNewProjectPage() {
                 <option value="Long Term">Long Term</option>
               </select>
             </FormGroup>
-            <FormGroup label="Project Issued Date" required>
+            <FormGroup label="Project Onboarding Date" required>
               <input type="date" value={projectIssuedDate} onChange={(e) => setProjectIssuedDate(e.target.value)} style={inputStyle(false)} />
             </FormGroup>
           </div>
         </Card>
 
         {/* ── Section A ── */}
-        <Card title="Section A: Project Handling Team Details">
+        <Card title="Section A: PMO Team Details">
           <button onClick={openPicker} style={{ ...btnStyle("primary"), marginBottom: 12 }}>+ Add Services</button>
 
           {/* Service tags */}
@@ -662,10 +656,20 @@ function WbsNewProjectPage() {
               </select>
             </FormGroup>
             <FormGroup label="Payment Terms">
-              <select value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} style={inputStyle(false)}>
-                <option value="">Select Payment Terms</option>
-                {(PAYMENT_TERMS_MAP[billingModel] || []).map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
+              {billingModel === "Custom" ? (
+                <input
+                  type="text"
+                  value={paymentTerms}
+                  onChange={(e) => setPaymentTerms(e.target.value)}
+                  placeholder="Enter custom payment terms..."
+                  style={inputStyle(false)}
+                />
+              ) : (
+                <select value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} style={inputStyle(false)}>
+                  <option value="">Select Payment Terms</option>
+                  {(PAYMENT_TERMS_MAP[billingModel] || []).map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
             </FormGroup>
           </div>
 
@@ -681,7 +685,11 @@ function WbsNewProjectPage() {
           {/* PO Status */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 16 }}>
             <FormGroup label="PO Status" required>
-              <select value={poStatus} onChange={(e) => setPoStatus(e.target.value)} style={inputStyle(false)}>
+              <select value={poStatus} onChange={(e) => {
+                const val = e.target.value;
+                setPoStatus(val);
+                if (val !== "PO Received") setPoFile(null);
+              }} style={inputStyle(false)}>
                 <option value="">Select PO Status</option>
                 <option value="PO Received">PO Received</option>
                 <option value="PO Pending">PO Pending</option>
@@ -692,77 +700,29 @@ function WbsNewProjectPage() {
 
           {/* PO Details (conditional) */}
           {poStatus === "PO Received" && (
-            <>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 16 }}>
-                <FormGroup label="PO Number"><input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} style={inputStyle(false)} /></FormGroup>
-                <FormGroup label="PO Date"><input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} style={inputStyle(false)} /></FormGroup>
-                <FormGroup label="Target Date"><input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} style={inputStyle(false)} /></FormGroup>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 16 }}>
-                <FormGroup label="Contact Name" required><input type="text" value={contactName} onChange={(e) => setContactName(e.target.value)} style={inputStyle(false)} /></FormGroup>
-                <FormGroup label="Contact Number" required><input type="tel" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} style={inputStyle(false)} /></FormGroup>
-                <FormGroup label="Contact Email" required><input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} style={inputStyle(false)} /></FormGroup>
-              </div>
-
-              {/* Invoice Schedule */}
-              <div style={{ marginTop: 20 }}>
-                <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: "#1a5490" }}>Invoice Schedule</h4>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                  <thead style={{ background: "#f3f4f6" }}>
-                    <tr>
-                      <th style={thStyle}>#</th>
-                      <th style={thStyle}>Milestone/Period</th>
-                      <th style={thStyle}>Invoice Target Date</th>
-                      <th style={thStyle}>Unit Price</th>
-                      <th style={thStyle}>Qty</th>
-                      <th style={thStyle}>Currency</th>
-                      <th style={thStyle}>Invoice Amount</th>
-                      <th style={thStyle}>Description</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {invoiceRows.length === 0 && (
-                      <tr><td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: "#6b7280", padding: 20 }}>Select a Billing Model above to populate the invoice schedule.</td></tr>
-                    )}
-                    {invoiceRows.map((inv, i) => (
-                      <tr key={inv.rowId}>
-                        <td style={tdStyle}>{i + 1}</td>
-                        <td style={tdStyle}>{inv.milestone}</td>
-                        <td style={tdStyle}><input type="date" value={inv.invoiceDate} onChange={(e) => updateInvoiceRow(inv.rowId, "invoiceDate", e.target.value)} style={tblInputStyle} /></td>
-                        <td style={tdStyle}><input type="number" value={inv.unitPrice} onChange={(e) => updateInvoiceRow(inv.rowId, "unitPrice", Number(e.target.value))} style={tblInputStyle} /></td>
-                        <td style={tdStyle}><input type="number" value={inv.qty} min={1} onChange={(e) => updateInvoiceRow(inv.rowId, "qty", Number(e.target.value))} style={tblInputStyle} /></td>
-                        <td style={tdStyle}>
-                          <select value={inv.currency} onChange={(e) => updateInvoiceRow(inv.rowId, "currency", e.target.value)} style={tblInputStyle}>
-                            {Object.keys(CURRENCY_SYMBOLS).map((c) => <option key={c}>{c}</option>)}
-                          </select>
-                        </td>
-                        <td style={{ ...tdStyle, background: "#f3f4f6" }}>{CURRENCY_SYMBOLS[inv.currency] || ""}{inv.amount.toLocaleString()}</td>
-                        <td style={tdStyle}><input type="text" value={inv.description} onChange={(e) => updateInvoiceRow(inv.rowId, "description", e.target.value)} style={tblInputStyle} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {/* Invoice summary */}
-                {invoiceRows.length > 0 && (
-                  <div style={{ background: "#f3f4f6", padding: 12, borderRadius: 6, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginTop: 12, fontSize: 13 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ color: "#6b7280", fontWeight: 600 }}>Subtotal:</span>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: "#1a5490" }}>{sym}{billSubtotal.toLocaleString()}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ color: "#6b7280", fontWeight: 600 }}>Tax (GST 18%):</span>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: "#1a5490" }}>{sym}{Math.round(billTax).toLocaleString()}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ color: "#6b7280", fontWeight: 600 }}>Grand Total:</span>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: "#1a5490" }}>{sym}{Math.round(billGrandTotal).toLocaleString()}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
+            <div style={{ marginBottom: 16 }}>
+              <FormGroup label="Attach PO Document">
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <label style={{ ...btnStyle("secondary"), display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                    📎 Choose File
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                      onChange={(e) => setPoFile(e.target.files?.[0] ?? null)}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                  <span style={{ fontSize: 12, color: poFile ? "#1f2937" : "#6b7280" }}>
+                    {poFile ? poFile.name : "No file selected"}
+                  </span>
+                  {poFile && (
+                    <button onClick={() => setPoFile(null)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>✕ Remove</button>
+                  )}
+                </div>
+              </FormGroup>
+            </div>
           )}
+
 
           {/* Comments B */}
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #d1d5db" }}>
@@ -773,15 +733,10 @@ function WbsNewProjectPage() {
 
         {/* ── Workflow & Approval ── */}
         <Card title="Workflow & Approval Status">
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-            <div style={{ background: "#f3f4f6", padding: "8px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Draft</div>
-          </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button onClick={handleSaveDraft} style={btnStyle("primary")}>Save Draft</button>
             <button onClick={handleExport} style={btnStyle("secondary")}>Export WBS</button>
-            <button onClick={handleSendForApproval} style={btnStyle("primary")}>Send for Approval</button>
-            <button onClick={() => setApproveModalOpen(true)} style={btnStyle("secondary")}>Approve</button>
-            <button onClick={() => setRejectModalOpen(true)} style={{ ...btnStyle("secondary"), background: "#ef4444", color: "#fff" }}>Reject</button>
+            <button onClick={handleAssignWbs} style={btnStyle("primary")}>Assign WBS</button>
           </div>
         </Card>
 
@@ -848,25 +803,6 @@ function WbsNewProjectPage() {
         </div>
       )}
 
-      {/* ── Approve Modal ── */}
-      {approveModalOpen && (
-        <ConfirmModal title="Approve WBS" onClose={() => setApproveModalOpen(false)} onConfirm={() => { toast.success("WBS Approved! Remarks: " + (approveRemarks || "None")); setApproveModalOpen(false); }} confirmLabel="Approve" confirmStyle={btnStyle("primary")}>
-          <p style={{ marginBottom: 16 }}>Are you sure you want to approve this WBS? This action cannot be undone.</p>
-          <textarea value={approveRemarks} onChange={(e) => setApproveRemarks(e.target.value)} placeholder="Add approval remarks (optional)..." style={{ width: "100%", minHeight: 80, padding: 10, border: "1px solid #d1d5db", borderRadius: 6 }} />
-        </ConfirmModal>
-      )}
-
-      {/* ── Reject Modal ── */}
-      {rejectModalOpen && (
-        <ConfirmModal title="Reject WBS" onClose={() => setRejectModalOpen(false)} onConfirm={() => {
-          if (!rejectReason.trim()) { toast.error("Please provide a rejection reason"); return; }
-          toast.error("WBS Rejected. Reason: " + rejectReason); setRejectModalOpen(false);
-        }} confirmLabel="Reject" confirmStyle={{ ...btnStyle("secondary"), background: "#ef4444", color: "#fff" }}>
-          <p style={{ marginBottom: 16 }}>Please provide a reason for rejection (required):</p>
-          <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason for rejection..." style={{ width: "100%", minHeight: 100, padding: 10, border: "1px solid #d1d5db", borderRadius: 6 }} required />
-        </ConfirmModal>
-      )}
-
     </div>
   );
 }
@@ -893,23 +829,6 @@ function FormGroup({ label, required, locked, children }: { label: string; requi
   );
 }
 
-function ConfirmModal({ title, children, onClose, onConfirm, confirmLabel, confirmStyle }: { title: string; children: React.ReactNode; onClose: () => void; onConfirm: () => void; confirmLabel: string; confirmStyle: React.CSSProperties }) {
-  return (
-    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1001, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 20px 25px rgba(0,0,0,0.15)", width: "90%", maxWidth: 400, display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: 20, borderBottom: "1px solid #d1d5db", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#1a5490" }}>{title}</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer" }}>×</button>
-        </div>
-        <div style={{ padding: 20 }}>{children}</div>
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #d1d5db", display: "flex", justifyContent: "space-between" }}>
-          <button onClick={onClose} style={btnStyle("secondary")}>Cancel</button>
-          <button onClick={onConfirm} style={confirmStyle}>{confirmLabel}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Style helpers ────────────────────────────────────────────────────────────
 

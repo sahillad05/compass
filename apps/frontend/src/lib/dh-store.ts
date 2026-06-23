@@ -288,7 +288,7 @@ export function getSeededServices(isReady: boolean): DhServicePrereq[] {
 export type SalesStatus = "Pending" | "Assigned" | "Approval";
 export type PMOStatus = "Prerequisite Collection" | "Validation" | "Ready To Start Project";
 export type DeliveryStatus = "Ongoing" | "Completed" | "Cancelled" | "On Hold Internally" | "On Hold Externally" | "After Release";
-export type AccountsStatus = "PO Pending" | "PO Received" | "Invoice Not Raised" | "Invoice Raised" | "Payment Pending" | "Payment Received";
+export type AccountsStatus = "PO Pending" | "PO Received" | "PO Raised" | "Invoice Not Raised" | "Invoice Raised" | "Payment Pending" | "Payment Received" | "PO Not Raised";
 export type PoStatus = "PO Pending" | "PO Received" | "PO Validated";
 export type PaymentStatus = "Payment Pending" | "Payment Received";
 
@@ -883,7 +883,7 @@ export const dhStore = {
     endDate: string;
     budget: number;
     wbsDetails?: any;
-    wbsStatus?: "draft" | "approval_pending" | "ph_approved" | "accounts_approved" | "approved" | "started";
+    wbsStatus?: "draft" | "approval_pending" | "ph_approved" | "accounts_approved" | "approved" | "started" | "assigned";
     wbsSubStatus?: string;
     engagementManager?: string;
     salesPerson?: string;
