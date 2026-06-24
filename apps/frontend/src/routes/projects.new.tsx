@@ -6,7 +6,7 @@ import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useRoleContext } from "@/lib/role-context";
-import { allClients, dhStore, useDhStore, buildProjectDisplayId } from "@/lib/dh-store";
+import { allClients, dhStore, useDhStore, buildProjectDisplayId, buildWbsId } from "@/lib/dh-store";
 
 export const Route = createFileRoute("/projects/new")({
   head: () => ({
@@ -163,10 +163,24 @@ function WbsNewProjectPage() {
   const [projectType, setProjectType] = useState("");
   const [projectIssuedDate] = useState(() => new Date().toISOString().slice(0, 10));
 
-  // ── Client selection ──
+  // ── Client selection (searchable combobox) ──
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientDropOpen, setClientDropOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState(clients[0]?.id ?? "");
   const selectedClient = clients.find((c) => c.id === selectedClientId) ?? clients[0];
-  const wbsId = "WBS-" + new Date().getFullYear() + "-" + String(Math.floor(Math.random() * 999)).padStart(3, "0");
+
+  // Sub-venture Name (pre-filled from client, editable)
+  const [subVentureName, setSubVentureName] = useState(selectedClient?.companyName ?? "");
+
+  // Filtered client list for the combobox
+  const filteredClients = clients.filter((c) =>
+    clientSearch.trim() === "" ||
+    c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
+    (c.companyName ?? "").toLowerCase().includes(clientSearch.toLowerCase())
+  );
+
+  // WBS ID — recomputed from selected client + current FY + next project seq
+  const wbsId = buildWbsId(selectedClientId);
 
   // ── Stepper ──
   const [stepperStep, setStepperStep] = useState(0); // 0=Draft, 1=Sent, 2=PH, 3=Accounts, 4=Approved, 5=Started
@@ -426,20 +440,87 @@ function WbsNewProjectPage() {
         </div>
 
         {/* ── Client Info Bar ── */}
-        <div style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 8, padding: 16, marginBottom: 20, display: "flex", alignItems: "center", gap: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-          <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#1a84d4", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700 }}>
-            {selectedClient?.logo?.charAt(0) || "?"}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#1a5490" }}>
-              <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} style={{ border: "none", background: "transparent", fontSize: 16, fontWeight: 700, color: "#1a5490", cursor: "pointer" }}>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+        <div style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 8, padding: 16, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
+            {/* Avatar */}
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#1a84d4", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, flexShrink: 0 }}>
+              {selectedClient?.logo?.charAt(0) || "?"}
             </div>
-            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{selectedClient?.industry} • {selectedClient?.contact}</div>
-          </div>
-          <div style={{ display: "flex", gap: 20, fontSize: 13 }}>
-            <div><div style={{ color: "#6b7280", fontSize: 11, fontWeight: 600 }}>WBS ID</div><div style={{ fontWeight: 600 }}>{wbsId}</div></div>
+
+            {/* Client search combobox + sub-venture */}
+            <div style={{ flex: 1, minWidth: 220 }}>
+              {/* Label row */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {/* Client Name searchable */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>CLIENT NAME <span style={{ color: "#ef4444" }}>*</span></div>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      value={clientDropOpen ? clientSearch : (selectedClient?.name ?? "")}
+                      placeholder="Search client…"
+                      onFocus={() => { setClientSearch(""); setClientDropOpen(true); }}
+                      onChange={(e) => { setClientSearch(e.target.value); setClientDropOpen(true); }}
+                      onBlur={() => setTimeout(() => setClientDropOpen(false), 150)}
+                      style={{ ...inputStyle(false), paddingRight: 28 }}
+                    />
+                    <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", pointerEvents: "none", fontSize: 11 }}>▾</span>
+                    {clientDropOpen && (
+                      <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", zIndex: 200, maxHeight: 220, overflowY: "auto" }}>
+                        {filteredClients.length === 0 && (
+                          <div style={{ padding: "10px 12px", fontSize: 12, color: "#6b7280" }}>No clients match</div>
+                        )}
+                        {filteredClients.map((c) => (
+                          <div
+                            key={c.id}
+                            onMouseDown={() => {
+                              setSelectedClientId(c.id);
+                              setSubVentureName(c.companyName ?? "");
+                              setEngagementManager(c.engagementManager ?? "");
+                              setClientSearch("");
+                              setClientDropOpen(false);
+                            }}
+                            style={{ padding: "8px 12px", cursor: "pointer", background: c.id === selectedClientId ? "#eff6ff" : "transparent", fontSize: 13, borderBottom: "1px solid #f3f4f6", display: "flex", flexDirection: "column", gap: 2 }}
+                          >
+                            <span style={{ fontWeight: 600, color: "#1a5490" }}>{c.name}</span>
+                            {c.companyName && <span style={{ fontSize: 11, color: "#6b7280" }}>{c.companyName}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#6b7280", marginTop: 3 }}>{selectedClient?.industry} • {selectedClient?.contact}</div>
+                </div>
+
+                {/* Sub-venture Name */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>SUB-VENTURE NAME</div>
+                  <input
+                    type="text"
+                    value={subVentureName}
+                    onChange={(e) => setSubVentureName(e.target.value)}
+                    placeholder="End customer / sub-venture…"
+                    style={inputStyle(false)}
+                  />
+                  {selectedClient?.companyName && subVentureName !== selectedClient.companyName && (
+                    <button
+                      type="button"
+                      onMouseDown={() => setSubVentureName(selectedClient.companyName ?? "")}
+                      style={{ marginTop: 3, background: "none", border: "none", fontSize: 11, color: "#1a84d4", cursor: "pointer", padding: 0 }}
+                    >
+                      ↩ Reset to "{selectedClient.companyName}"
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* IDs panel */}
+            <div style={{ display: "flex", gap: 20, fontSize: 13, flexShrink: 0 }}>
+              <div><div style={{ color: "#6b7280", fontSize: 11, fontWeight: 600 }}>CLIENT ID</div><div style={{ fontWeight: 700, color: "#1a5490" }}>{selectedClient?.id?.startsWith("C") ? selectedClient.id : "C" + String(clients.findIndex(c => c.id === selectedClientId) + 1).padStart(3, "0")}</div></div>
+              <div><div style={{ color: "#6b7280", fontSize: 11, fontWeight: 600 }}>PROJECT ID</div><div style={{ fontWeight: 700, color: "#1a5490" }}>{buildProjectDisplayId()}</div></div>
+              <div><div style={{ color: "#6b7280", fontSize: 11, fontWeight: 600 }}>WBS ID</div><div style={{ fontWeight: 700, color: "#059669" }}>{wbsId}</div></div>
+            </div>
           </div>
         </div>
 
@@ -477,12 +558,12 @@ function WbsNewProjectPage() {
               </select>
             </FormGroup>
             <FormGroup label="Engagement Manager">
-              <select value={engagementManager} onChange={(e) => setEngagementManager(e.target.value)} style={inputStyle(false)}>
-                <option value="">Select Manager</option>
-                <option value="Rahul Sharma">Rahul Sharma</option>
-                <option value="Pradeep Singh">Pradeep Singh</option>
-                <option value="Riya Kapoor">Riya Kapoor</option>
-              </select>
+              <input
+                type="text"
+                value={engagementManager}
+                readOnly
+                style={inputStyle(true)}
+              />
             </FormGroup>
             <FormGroup label="Sales Person" required>
               <select value={salesPerson} onChange={(e) => setSalesPerson(e.target.value)} style={inputStyle(false)}>

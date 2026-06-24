@@ -870,8 +870,7 @@ const uid = (prefix: string) => `${prefix}${Date.now()}${counter++}`;
 // Returns the FY start year: e.g. April 2026–March 2027 → 2026
 function getCurrentFYStart(): number {
   const now = new Date();
-  const month = now.getMonth(); // 0-based: March=2, April=3
-  return month >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
 }
 
 // FY start date as a comparable string "YYYY-04-01"
@@ -879,26 +878,52 @@ function getFYStartDate(fyStartYear: number): string {
   return `${fyStartYear}-04-01`;
 }
 
-// Count how many extraProjects were created in the current FY
-function getNextProjectSeqId(): string {
+// Next client sequential number → padded to 3 digits with "C" prefix e.g. "C011"
+function getNextClientSeqId(): string {
+  const n = allClients().length + 1;
+  return "C" + String(n).padStart(3, "0");
+}
+
+// Next project sequential number → padded to 3 digits with "P" prefix e.g. "P001"
+// Resets each financial year (April 1)
+function getNextProjectSeqNum(): string {
   const fyStart = getFYStartDate(getCurrentFYStart());
   const count = state.extraProjects.filter(
     (p) => (p.projectIssuedDate ?? "") >= fyStart
   ).length;
-  return String(count + 1).padStart(2, "0");
+  return "P" + String(count + 1).padStart(3, "0");
 }
 
-// Build the display Project ID: just the zero-padded sequence number
+// Build WBS ID: IN-YYYY-YY-CLIENTID-PROJECTID
+// e.g. IN-2026-27-C011-P001
+export function buildWbsId(clientId: string): string {
+  const fyStart = getCurrentFYStart();
+  const fyEnd = String(fyStart + 1).slice(-2); // last 2 digits of next year
+  const paddedClientId = clientId.startsWith("C")
+    ? clientId
+    : "C" + String(allClients().findIndex((c) => c.id === clientId) + 1).padStart(3, "0");
+  const projSeq = getNextProjectSeqNum();
+  return `IN-${fyStart}-${fyEnd}-${paddedClientId}-${projSeq}`;
+}
+
+// Build the display Project ID: P001, P002… (FY-scoped)
 export function buildProjectDisplayId(): string {
-  return getNextProjectSeqId();
+  return getNextProjectSeqNum();
 }
 
 export const dhStore = {
   addClient(input: Omit<Client, "id" | "logo"> & { logo?: string }) {
-    const nextNum = allClients().length + 1;
-    const id = String(nextNum).padStart(2, "0");
+    const id = getNextClientSeqId();
     const logo = (input.logo ?? input.name.slice(0, 2)).toUpperCase();
-    const c: Client = { id, name: input.name, industry: input.industry, contact: input.contact, logo };
+    const c: Client = {
+      id,
+      name: input.name,
+      industry: input.industry,
+      contact: input.contact,
+      logo,
+      engagementManager: input.engagementManager,
+      companyName: input.companyName,
+    };
     state.extraClients.push(c);
     emit();
     return c;
@@ -927,7 +952,8 @@ export const dhStore = {
     sectionBComments?: string;
   }) {
     const id = uid("p");
-    const seqId = getNextProjectSeqId();
+    const seqId = getNextProjectSeqNum();
+    const wbsAutoId = buildWbsId(input.clientId);
     const now = new Date().toISOString();
 
     // Auto-generate tasks from WBS services
@@ -981,6 +1007,7 @@ export const dhStore = {
       sectionAComments: input.sectionAComments,
       sectionBComments: input.sectionBComments,
       projectSeqId: seqId,
+      wbsId: wbsAutoId,
     };
     state.extraProjects.push(p);
 

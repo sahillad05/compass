@@ -123,7 +123,8 @@ export interface Project {
   invoiceValue?: number;
   sectionAComments?: string;
   sectionBComments?: string;
-  projectSeqId?: string; // FY-scoped sequential ID e.g. "01", "02" — resets each April 1
+  projectSeqId?: string; // FY-scoped sequential ID e.g. "P001" — resets each April 1
+  wbsId?: string;        // Full WBS ID e.g. "IN-2026-27-C011-P001"
 }
 
 
@@ -135,6 +136,8 @@ export interface Client {
   contact: string;
   clientType?: "NEW" | "OLD"; // Dhanshree: NEW or OLD for onboarding status
   previousPmIds?: string[]; // Dhanshree: PMs who previously worked with this client
+  engagementManager?: string; // set during client onboarding
+  companyName?: string; // Sub-venture / End Customer Name
 }
 
 export interface IssueComment {
@@ -226,16 +229,16 @@ export const getPerson = (id: string) => people.find((p) => p.id === id)!;
 
 // ---------- Clients ----------
 export const clients: Client[] = [
-  { id: "c1", name: "Northwind Bank", industry: "Banking", logo: "NB", contact: "ops@northwind.com", clientType: "OLD", previousPmIds: ["u3", "u4"] },
-  { id: "c2", name: "Helix Pharma", industry: "Healthcare", logo: "HP", contact: "it@helix.com", clientType: "OLD", previousPmIds: ["u3", "u4", "u5"] },
-  { id: "c3", name: "Orbit Retail", industry: "Retail", logo: "OR", contact: "tech@orbit.com", clientType: "OLD", previousPmIds: ["u3"] },
-  { id: "c4", name: "Zenith Logistics", industry: "Logistics", logo: "ZL", contact: "pm@zenith.com", clientType: "NEW", previousPmIds: [] },
-  { id: "c5", name: "Lumen Energy", industry: "Energy", logo: "LE", contact: "digital@lumen.com", clientType: "OLD", previousPmIds: ["u4", "u5"] },
-  { id: "c6", name: "CloudSync AI", industry: "Technology", logo: "CA", contact: "contact@cloudsync.com", clientType: "NEW", previousPmIds: [] },
-  { id: "c7", name: "FinTech Global", industry: "Finance", logo: "FG", contact: "dev@fintechglobal.com", clientType: "OLD", previousPmIds: ["u3", "u4"] },
-  { id: "c8", name: "MediCare Plus", industry: "Healthcare", logo: "MP", contact: "tech@medicareplus.com", clientType: "NEW", previousPmIds: [] },
-  { id: "c9", name: "EcoGreen Solutions", industry: "Environment", logo: "EG", contact: "projects@ecogreen.com", clientType: "OLD", previousPmIds: ["u5"] },
-  { id: "c10", name: "AutoDrive Systems", industry: "Automotive", logo: "AD", contact: "engineering@autodrive.com", clientType: "OLD", previousPmIds: ["u3", "u4", "u5"] },
+  { id: "c1",  name: "Northwind Bank",      industry: "Banking",      logo: "NB", contact: "ops@northwind.com",        clientType: "OLD", previousPmIds: ["u3", "u4"],       engagementManager: "Rahul Sharma",    companyName: "Northwind Financial Services" },
+  { id: "c2",  name: "Helix Pharma",         industry: "Healthcare",   logo: "HP", contact: "it@helix.com",             clientType: "OLD", previousPmIds: ["u3", "u4", "u5"], engagementManager: "Pradeep Singh",   companyName: "Helix Life Sciences" },
+  { id: "c3",  name: "Orbit Retail",         industry: "Retail",       logo: "OR", contact: "tech@orbit.com",           clientType: "OLD", previousPmIds: ["u3"],             engagementManager: "Riya Kapoor",     companyName: "Orbit Commerce Pvt Ltd" },
+  { id: "c4",  name: "Zenith Logistics",     industry: "Logistics",    logo: "ZL", contact: "pm@zenith.com",            clientType: "NEW", previousPmIds: [],                 engagementManager: "Rahul Sharma",    companyName: "Zenith Supply Chain" },
+  { id: "c5",  name: "Lumen Energy",         industry: "Energy",       logo: "LE", contact: "digital@lumen.com",        clientType: "OLD", previousPmIds: ["u4", "u5"],       engagementManager: "Pradeep Singh",   companyName: "Lumen Power Solutions" },
+  { id: "c6",  name: "CloudSync AI",         industry: "Technology",   logo: "CA", contact: "contact@cloudsync.com",   clientType: "NEW", previousPmIds: [],                 engagementManager: "Riya Kapoor",     companyName: "CloudSync Technologies" },
+  { id: "c7",  name: "FinTech Global",       industry: "Finance",      logo: "FG", contact: "dev@fintechglobal.com",   clientType: "OLD", previousPmIds: ["u3", "u4"],       engagementManager: "Rahul Sharma",    companyName: "FinTech Global Ltd" },
+  { id: "c8",  name: "MediCare Plus",        industry: "Healthcare",   logo: "MP", contact: "tech@medicareplus.com",   clientType: "NEW", previousPmIds: [],                 engagementManager: "Pradeep Singh",   companyName: "MediCare Health Solutions" },
+  { id: "c9",  name: "EcoGreen Solutions",   industry: "Environment",  logo: "EG", contact: "projects@ecogreen.com",   clientType: "OLD", previousPmIds: ["u5"],             engagementManager: "Riya Kapoor",     companyName: "EcoGreen Sustainability" },
+  { id: "c10", name: "AutoDrive Systems",    industry: "Automotive",   logo: "AD", contact: "engineering@autodrive.com",clientType: "OLD", previousPmIds: ["u3", "u4", "u5"],engagementManager: "Rahul Sharma",    companyName: "AutoDrive Technologies" },
 ];
 
 // Senior PM (u1) is assigned c1, c2, c3. EM (u2) is assigned c2, c4, c5. PMO (u11) sees everything.

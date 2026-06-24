@@ -173,7 +173,7 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [s, setS] = useState<NewClientState>(() => ({
     clientName: "", companyName: "",
-    customerId: String(allClients().length + 1).padStart(2, "0"),
+    customerId: "C" + String(allClients().length + 1).padStart(3, "0"),
     companyOwner: "", engagementManager: "", phoneNumber: "", city: "", country: "",
     industry: "", businessType: "",
     createdAt: new Date().toISOString(),
@@ -246,6 +246,8 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
         name: s.clientName || s.companyName,
         industry: s.industry || "Other",
         contact: s.contacts[0]?.email ?? "",
+        engagementManager: s.engagementManager,
+        companyName: s.companyName,
       });
       toast.success("Client onboarded", { description: `${s.clientName} added to your directory.` });
       setSubmitting(false);
