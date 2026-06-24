@@ -159,9 +159,13 @@ interface NewClientState {
   industry: string; businessType: string;
   createdAt: string; createdBy: string;
   panNumber: string; gstNumber: string; msmeNumber: string;
+  kycFile: File | null;
   contacts: ContactEntry[];
   notes: string;
 }
+
+const inputCls = "h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const Row = ({ label, v }: { label: string; v: string }) => (<><dt className="text-muted-foreground">{label}</dt><dd className="font-medium">{v || "—"}</dd></>);
 
 function NewClientModal({ onClose }: { onClose: () => void }) {
   const { user } = useRoleContext();
@@ -169,34 +173,68 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [s, setS] = useState<NewClientState>(() => ({
     clientName: "", companyName: "",
-    customerId: `CUST-${Date.now().toString().slice(-6)}`,
+    customerId: String(allClients().length + 1).padStart(2, "0"),
     companyOwner: "", engagementManager: "", phoneNumber: "", city: "", country: "",
-    industry: "", businessType: "Enterprise",
+    industry: "", businessType: "",
     createdAt: new Date().toISOString(),
     createdBy: user?.name ?? "Unknown",
     panNumber: "", gstNumber: "", msmeNumber: "",
+    kycFile: null,
     contacts: [{ name: "", email: "", phone: "", designation: "" }],
     notes: "",
   }));
-  const u = (k: keyof Omit<NewClientState, "contacts">, v: string) => setS((p) => ({ ...p, [k]: v }));
+
+  const u = (k: keyof Omit<NewClientState, "contacts" | "kycFile">, v: string) =>
+    setS((p) => ({ ...p, [k]: v }));
 
   const MAX_CONTACTS = 3;
+
   const addContact = () =>
-    setS((p) => p.contacts.length >= MAX_CONTACTS ? p : { ...p, contacts: [...p.contacts, { name: "", email: "", phone: "", designation: "" }] });
+    setS((p) =>
+      p.contacts.length >= MAX_CONTACTS
+        ? p
+        : { ...p, contacts: [...p.contacts, { name: "", email: "", phone: "", designation: "" }] }
+    );
 
   const removeContact = (idx: number) =>
     setS((p) => ({ ...p, contacts: p.contacts.filter((_, i) => i !== idx) }));
 
   const updateContact = (idx: number, field: keyof ContactEntry, val: string) =>
-    setS((p) => {
-      const updated = p.contacts.map((c, i) => i === idx ? { ...c, [field]: val } : c);
-      return { ...p, contacts: updated };
-    });
+    setS((p) => ({
+      ...p,
+      contacts: p.contacts.map((c, i) => (i === idx ? { ...c, [field]: val } : c)),
+    }));
 
-  const stepValid = () => {
-    if (step === 1) return s.clientName.trim() && s.companyName.trim() && s.companyOwner.trim() && s.industry.trim();
-    if (step === 2) return s.contacts.every((c) => c.name.trim() && c.email.trim());
-    return true;
+  // All 9 required fields on step 1 must be non-empty
+  const isStep1Valid = (): boolean =>
+    !!(
+      s.clientName.trim() &&
+      s.companyName.trim() &&
+      s.companyOwner.trim() &&
+      s.engagementManager.trim() &&
+      s.phoneNumber.trim() &&
+      s.city.trim() &&
+      s.country.trim() &&
+      s.industry.trim() &&
+      s.businessType.trim()
+    );
+
+  const isStep2Valid = (): boolean =>
+    s.contacts.every((c) => c.name.trim() !== "" && c.email.trim() !== "") &&
+    s.panNumber.trim() !== "" &&
+    s.gstNumber.trim() !== "" &&
+    s.msmeNumber.trim() !== "";
+
+  const handleNext = () => {
+    if (step === 1 && !isStep1Valid()) {
+      toast.error("Please complete all required fields");
+      return;
+    }
+    if (step === 2 && !isStep2Valid()) {
+      toast.error("Please complete all required fields");
+      return;
+    }
+    setStep((prev) => prev + 1);
   };
 
   const readOnlyCls = cn(inputCls, "bg-muted text-muted-foreground cursor-not-allowed");
@@ -204,7 +242,11 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
   const submit = () => {
     setSubmitting(true);
     setTimeout(() => {
-      dhStore.addClient({ name: s.clientName || s.companyName, industry: s.industry || "Other", contact: s.contacts[0]?.email ?? "" });
+      dhStore.addClient({
+        name: s.clientName || s.companyName,
+        industry: s.industry || "Other",
+        contact: s.contacts[0]?.email ?? "",
+      });
       toast.success("Client onboarded", { description: `${s.clientName} added to your directory.` });
       setSubmitting(false);
       onClose();
@@ -212,50 +254,87 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal title="New Client Onboarding" onClose={onClose} wide>
+    <Modal title="New Customer Onboarding" onClose={onClose} wide>
+      {/* Stepper */}
       <div className="mb-5 flex items-center gap-2 text-xs">
         {["Company", "Contact", "Review"].map((label, i) => {
-          const n = i + 1; const active = step === n; const done = step > n;
+          const n = i + 1;
+          const active = step === n;
+          const done = step > n;
           return (
             <div key={label} className="flex items-center gap-2">
-              <div className={cn("flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold",
-                done ? "border-success bg-success text-success-foreground"
-                  : active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground")}>
+              <div className={cn(
+                "flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold",
+                done
+                  ? "border-success bg-success text-success-foreground"
+                  : active
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card text-muted-foreground"
+              )}>
                 {done ? <Check className="h-3 w-3" /> : n}
               </div>
-              <span className={cn("font-medium", active ? "text-foreground" : "text-muted-foreground")}>{label}</span>
+              <span className={cn("font-medium", active ? "text-foreground" : "text-muted-foreground")}>
+                {label}
+              </span>
               {i < 2 && <ChevronRight className="mx-1 h-3.5 w-3.5 text-muted-foreground" />}
             </div>
           );
         })}
       </div>
 
+      {/* Step 1 — Company details */}
       {step === 1 && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="TK Customer" required><input className={inputCls} value={s.clientName} onChange={(e) => u("clientName", e.target.value)} /></Field>
-          <Field label="End Customer Name / Sub-venture Name" required><input className={inputCls} value={s.companyName} onChange={(e) => u("companyName", e.target.value)} /></Field>
-          <Field label="Customer ID"><input className={readOnlyCls} value={s.customerId} readOnly /></Field>
-          <Field label="Company Owner" required><input className={inputCls} value={s.companyOwner} onChange={(e) => u("companyOwner", e.target.value)} /></Field>
-          <Field label="Engagement Manager"><input className={inputCls} value={s.engagementManager} onChange={(e) => u("engagementManager", e.target.value)} /></Field>
-          <Field label="Phone Number"><input className={inputCls} value={s.phoneNumber} onChange={(e) => u("phoneNumber", e.target.value)} /></Field>
-          <Field label="City"><input className={inputCls} value={s.city} onChange={(e) => u("city", e.target.value)} /></Field>
-          <Field label="Country / Region"><input className={inputCls} value={s.country} onChange={(e) => u("country", e.target.value)} /></Field>
+          <Field label="TK Customer / Partner Name" required>
+            <input className={inputCls} value={s.clientName} onChange={(e) => u("clientName", e.target.value)} />
+          </Field>
+          <Field label="End Customer Name / Sub-venture Name" required>
+            <input className={inputCls} value={s.companyName} onChange={(e) => u("companyName", e.target.value)} />
+          </Field>
+          <Field label="Customer ID">
+            <input className={readOnlyCls} value={s.customerId} readOnly />
+          </Field>
+          <Field label="Company Owner" required>
+            <input className={inputCls} value={s.companyOwner} onChange={(e) => u("companyOwner", e.target.value)} />
+          </Field>
+          <Field label="Engagement Manager" required>
+            <input className={inputCls} value={s.engagementManager} onChange={(e) => u("engagementManager", e.target.value)} />
+          </Field>
+          <Field label="Phone Number" required>
+            <input className={inputCls} value={s.phoneNumber} onChange={(e) => u("phoneNumber", e.target.value)} />
+          </Field>
+          <Field label="City" required>
+            <input className={inputCls} value={s.city} onChange={(e) => u("city", e.target.value)} />
+          </Field>
+          <Field label="Country / Region" required>
+            <input className={inputCls} value={s.country} onChange={(e) => u("country", e.target.value)} />
+          </Field>
           <Field label="Industry" required>
             <select className={inputCls} value={s.industry} onChange={(e) => u("industry", e.target.value)}>
               <option value="">Select industry</option>
-              {["Banking", "Healthcare", "Retail", "Logistics", "Energy", "Manufacturing", "Telecom", "Media"].map((o) => <option key={o}>{o}</option>)}
+              {["Banking", "Healthcare", "Retail", "Logistics", "Energy", "Manufacturing", "Telecom", "Media"].map((o) => (
+                <option key={o}>{o}</option>
+              ))}
             </select>
           </Field>
-          <Field label="Business Type">
+          <Field label="Business Type" required>
             <select className={inputCls} value={s.businessType} onChange={(e) => u("businessType", e.target.value)}>
-              {["Enterprise", "Mid-Market", "SMB", "Public Sector"].map((o) => <option key={o}>{o}</option>)}
+              <option value="">Select business type</option>
+              {["Enterprise", "Mid-Market", "SMB", "Public Sector"].map((o) => (
+                <option key={o}>{o}</option>
+              ))}
             </select>
           </Field>
-          <Field label="Created At"><input className={readOnlyCls} value={format(new Date(s.createdAt), "dd MMM yyyy, HH:mm")} readOnly /></Field>
-          <Field label="Created By"><input className={readOnlyCls} value={s.createdBy} readOnly /></Field>
+          <Field label="Created At">
+            <input className={readOnlyCls} value={format(new Date(s.createdAt), "dd MMM yyyy, HH:mm")} readOnly />
+          </Field>
+          <Field label="Created By">
+            <input className={readOnlyCls} value={s.createdBy} readOnly />
+          </Field>
         </div>
       )}
 
+      {/* Step 2 — Contacts + registration numbers */}
       {step === 2 && (
         <div className="space-y-3">
           {s.contacts.map((ct, idx) => (
@@ -276,33 +355,16 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Contact Person" required>
-                  <input
-                    className={inputCls}
-                    value={ct.name}
-                    onChange={(e) => updateContact(idx, "name", e.target.value)}
-                  />
+                  <input className={inputCls} value={ct.name} onChange={(e) => updateContact(idx, "name", e.target.value)} />
                 </Field>
                 <Field label="Email" required>
-                  <input
-                    type="email"
-                    className={inputCls}
-                    value={ct.email}
-                    onChange={(e) => updateContact(idx, "email", e.target.value)}
-                  />
+                  <input type="email" className={inputCls} value={ct.email} onChange={(e) => updateContact(idx, "email", e.target.value)} />
                 </Field>
                 <Field label="Phone">
-                  <input
-                    className={inputCls}
-                    value={ct.phone}
-                    onChange={(e) => updateContact(idx, "phone", e.target.value)}
-                  />
+                  <input className={inputCls} value={ct.phone} onChange={(e) => updateContact(idx, "phone", e.target.value)} />
                 </Field>
                 <Field label="Designation">
-                  <input
-                    className={inputCls}
-                    value={ct.designation}
-                    onChange={(e) => updateContact(idx, "designation", e.target.value)}
-                  />
+                  <input className={inputCls} value={ct.designation} onChange={(e) => updateContact(idx, "designation", e.target.value)} />
                 </Field>
               </div>
               <div className="mt-3 flex items-center gap-2">
@@ -321,26 +383,51 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
             </div>
           ))}
           <div className="grid gap-3 sm:grid-cols-2 mt-4 pt-4 border-t border-border">
-            <Field label="Company PAN Number">
-              <input
-                className={inputCls}
-                value={s.panNumber}
-                onChange={(e) => u("panNumber", e.target.value)}
-              />
+            <Field label="Company PAN Number" required>
+              <input className={inputCls} value={s.panNumber} onChange={(e) => u("panNumber", e.target.value)} />
             </Field>
-            <Field label="GST Registration Number">
-              <input
-                className={inputCls}
-                value={s.gstNumber}
-                onChange={(e) => u("gstNumber", e.target.value)}
-              />
+            <Field label="GST Registration Number" required>
+              <input className={inputCls} value={s.gstNumber} onChange={(e) => u("gstNumber", e.target.value)} />
             </Field>
-            <Field label="MSME Registration Number" className="sm:col-span-2">
-              <input
-                className={inputCls}
-                value={s.msmeNumber}
-                onChange={(e) => u("msmeNumber", e.target.value)}
-              />
+            <Field label="MSME Registration Number" required>
+              <input className={inputCls} value={s.msmeNumber} onChange={(e) => u("msmeNumber", e.target.value)} />
+            </Field>
+            <Field label="KYC Document">
+              <div className="relative">
+                <label className={cn(
+                  "flex h-9 w-full cursor-pointer items-center gap-2 rounded-md border border-dashed border-input bg-card px-3 text-sm transition-colors hover:bg-accent",
+                  s.kycFile && "border-success/50 bg-success/5"
+                )}>
+                  <input
+                    type="file"
+                    accept="*/*"
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    onChange={(e) => setS((p) => ({ ...p, kycFile: e.target.files?.[0] ?? null }))}
+                  />
+                  {s.kycFile ? (
+                    <>
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
+                        <Check className="h-3 w-3" />
+                      </span>
+                      <span className="flex-1 truncate text-xs font-medium text-foreground">{s.kycFile.name}</span>
+                      <span className="text-[10px] text-muted-foreground">{(s.kycFile.size / 1024).toFixed(0)} KB</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); setS((p) => ({ ...p, kycFile: null })); }}
+                        className="ml-1 rounded p-0.5 hover:bg-destructive/10 hover:text-destructive"
+                        aria-label="Remove file"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-muted-foreground">📎</span>
+                      <span className="text-xs text-muted-foreground">Click to attach KYC document</span>
+                    </>
+                  )}
+                </label>
+              </div>
             </Field>
           </div>
           <Field label="Notes" className="pt-1">
@@ -349,6 +436,7 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
+      {/* Step 3 — Review */}
       {step === 3 && (
         <div className="rounded-lg border border-border bg-accent/20 p-4">
           <h4 className="mb-3 text-sm font-semibold">Client Summary</h4>
@@ -357,10 +445,10 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
             <Row label="Company Name" v={s.companyName} />
             <Row label="Customer ID" v={s.customerId} />
             <Row label="Company Owner" v={s.companyOwner} />
-            <Row label="Engagement Manager" v={s.engagementManager || "—"} />
-            <Row label="Phone Number" v={s.phoneNumber || "—"} />
-            <Row label="City" v={s.city || "—"} />
-            <Row label="Country / Region" v={s.country || "—"} />
+            <Row label="Engagement Manager" v={s.engagementManager} />
+            <Row label="Phone Number" v={s.phoneNumber} />
+            <Row label="City" v={s.city} />
+            <Row label="Country / Region" v={s.country} />
             <Row label="Industry" v={s.industry} />
             <Row label="Business Type" v={s.businessType} />
             <Row label="Created At" v={format(new Date(s.createdAt), "dd MMM yyyy, HH:mm")} />
@@ -368,6 +456,7 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
             <Row label="Company PAN Number" v={s.panNumber || "—"} />
             <Row label="GST Registration Number" v={s.gstNumber || "—"} />
             <Row label="MSME Registration Number" v={s.msmeNumber || "—"} />
+            <Row label="KYC Document" v={s.kycFile ? s.kycFile.name : "—"} />
           </dl>
           <div className="mt-3 space-y-2">
             <p className="text-xs font-medium text-muted-foreground">Contacts</p>
@@ -389,19 +478,27 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
+      {/* Footer navigation */}
       <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
-        <button onClick={() => (step === 1 ? onClose() : setStep(step - 1))}
-          className="rounded-md border border-input bg-card px-3 py-1.5 text-xs hover:bg-accent">
+        <button
+          onClick={() => (step === 1 ? onClose() : setStep(step - 1))}
+          className="rounded-md border border-input bg-card px-3 py-1.5 text-xs hover:bg-accent"
+        >
           {step === 1 ? "Cancel" : "Back"}
         </button>
         {step < 3 ? (
-          <button onClick={() => { if (!stepValid()) return toast.error("Please complete required fields"); setStep(step + 1); }}
-            className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90">
+          <button
+            onClick={handleNext}
+            className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+          >
             Next <ArrowRight className="h-3 w-3" />
           </button>
         ) : (
-          <button disabled={submitting} onClick={submit}
-            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+          <button
+            disabled={submitting}
+            onClick={submit}
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
             {submitting ? "Submitting…" : "Submit"}
           </button>
         )}
@@ -409,9 +506,6 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
     </Modal>
   );
 }
-
-const inputCls = "h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const Row = ({ label, v }: { label: string; v: string }) => (<><dt className="text-muted-foreground">{label}</dt><dd className="font-medium">{v || "—"}</dd></>);
 
 function CustomerDrawer({ client, onClose }: { client: Client; onClose: () => void }) {
   const projects = allProjects();
@@ -429,7 +523,6 @@ function CustomerDrawer({ client, onClose }: { client: Client; onClose: () => vo
           </div>
           <button onClick={onClose} className="rounded-md p-2 hover:bg-accent" aria-label="Close"><X className="h-4 w-4" /></button>
         </header>
-
         <Section title="Active Projects" projs={active} empty="No active projects" />
         <Section title="Completed Projects" projs={completed} empty="No completed projects" />
       </div>
@@ -440,7 +533,9 @@ function CustomerDrawer({ client, onClose }: { client: Client; onClose: () => vo
 function Section({ title, projs, empty }: { title: string; projs: ReturnType<typeof allProjects>; empty: string }) {
   return (
     <section className="border-b border-border p-4">
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Building2 className="h-4 w-4 text-muted-foreground" />{title} · {projs.length}</h3>
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+        <Building2 className="h-4 w-4 text-muted-foreground" />{title} · {projs.length}
+      </h3>
       {projs.length === 0 ? (
         <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (

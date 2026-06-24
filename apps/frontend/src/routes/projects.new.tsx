@@ -6,7 +6,7 @@ import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useRoleContext } from "@/lib/role-context";
-import { allClients, dhStore, useDhStore } from "@/lib/dh-store";
+import { allClients, dhStore, useDhStore, buildProjectDisplayId } from "@/lib/dh-store";
 
 export const Route = createFileRoute("/projects/new")({
   head: () => ({
@@ -156,20 +156,17 @@ function WbsNewProjectPage() {
 
   // ── Header fields ──
   const [projectName, setProjectName] = useState("");
-  const projectId = "PRJ-" + new Date().getFullYear() + "-" + String(Math.floor(Math.random() * 99999)).padStart(5, "0");
+  const projectId = buildProjectDisplayId();
   const [contractType, setContractType] = useState("");
   const [engagementManager, setEngagementManager] = useState("");
   const [salesPerson, setSalesPerson] = useState("");
   const [projectType, setProjectType] = useState("");
-  const [projectIssuedDate, setProjectIssuedDate] = useState("");
+  const [projectIssuedDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   // ── Client selection ──
   const [selectedClientId, setSelectedClientId] = useState(clients[0]?.id ?? "");
   const selectedClient = clients.find((c) => c.id === selectedClientId) ?? clients[0];
   const wbsId = "WBS-" + new Date().getFullYear() + "-" + String(Math.floor(Math.random() * 999)).padStart(3, "0");
-
-  // ── Admin mode ──
-  const [adminMode, setAdminMode] = useState(false);
 
   // ── Stepper ──
   const [stepperStep, setStepperStep] = useState(0); // 0=Draft, 1=Sent, 2=PH, 3=Accounts, 4=Approved, 5=Started
@@ -419,13 +416,6 @@ function WbsNewProjectPage() {
         </div>
       </nav>
 
-      {/* ── Admin mode bar ── */}
-      {adminMode && (
-        <div style={{ background: "#f59e0b", color: "#000", padding: "10px 20px", display: "flex", alignItems: "center", fontSize: 13, fontWeight: 600, gap: 10 }}>
-          🔒 Admin Edit Mode Enabled — Locked fields can now be modified
-        </div>
-      )}
-
       {/* ── Content ── */}
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: 20 }}>
 
@@ -449,7 +439,6 @@ function WbsNewProjectPage() {
             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{selectedClient?.industry} • {selectedClient?.contact}</div>
           </div>
           <div style={{ display: "flex", gap: 20, fontSize: 13 }}>
-            <div><div style={{ color: "#6b7280", fontSize: 11, fontWeight: 600 }}>CID</div><div style={{ fontWeight: 600 }}>{selectedClient?.id}</div></div>
             <div><div style={{ color: "#6b7280", fontSize: 11, fontWeight: 600 }}>WBS ID</div><div style={{ fontWeight: 600 }}>{wbsId}</div></div>
           </div>
         </div>
@@ -469,20 +458,11 @@ function WbsNewProjectPage() {
           </div>
         </div>
 
-        {/* ── Admin Toggle ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f3f4f6", padding: 12, borderRadius: 6, marginBottom: 16 }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Admin Edit Mode:</span>
-          <div onClick={() => setAdminMode(!adminMode)} style={{ display: "inline-block", width: 40, height: 24, background: adminMode ? "#22c55e" : "#d1d5db", borderRadius: 12, position: "relative", cursor: "pointer", transition: "all 0.2s" }}>
-            <div style={{ position: "absolute", width: 20, height: 20, background: "#fff", borderRadius: "50%", top: 2, left: adminMode ? 18 : 2, transition: "all 0.2s" }} />
-          </div>
-          <span style={{ fontSize: 12, color: "#6b7280" }}>Toggle to enable editing of locked fields</span>
-        </div>
-
         {/* ── WBS Header Card ── */}
-        <Card title="WBS Header Information">
+        <Card title="WBS Information">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 16 }}>
-            <FormGroup label="Project Name" required locked={!adminMode}>
-              <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} readOnly={!adminMode} style={inputStyle(!adminMode)} />
+            <FormGroup label="Project Name" required>
+              <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} style={inputStyle(false)} />
             </FormGroup>
             <FormGroup label="Project ID (Auto)">
               <input type="text" value={projectId} readOnly style={inputStyle(true)} />
@@ -494,7 +474,6 @@ function WbsNewProjectPage() {
                 <option value="">Select Contract Type</option>
                 <option value="Fixed">Fixed</option>
                 <option value="Time & Materials">Time & Materials</option>
-                <option value="Retainer">Retainer</option>
               </select>
             </FormGroup>
             <FormGroup label="Engagement Manager">
@@ -523,7 +502,7 @@ function WbsNewProjectPage() {
               </select>
             </FormGroup>
             <FormGroup label="Project Onboarding Date" required>
-              <input type="date" value={projectIssuedDate} onChange={(e) => setProjectIssuedDate(e.target.value)} style={inputStyle(false)} />
+              <input type="date" value={projectIssuedDate} readOnly style={inputStyle(true)} />
             </FormGroup>
           </div>
         </Card>

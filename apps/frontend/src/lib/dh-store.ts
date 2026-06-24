@@ -866,9 +866,37 @@ export function findClient(id: string): Client | undefined {
 let counter = 1;
 const uid = (prefix: string) => `${prefix}${Date.now()}${counter++}`;
 
+// Financial year runs April 1 → March 31.
+// Returns the FY start year: e.g. April 2026–March 2027 → 2026
+function getCurrentFYStart(): number {
+  const now = new Date();
+  const month = now.getMonth(); // 0-based: March=2, April=3
+  return month >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+// FY start date as a comparable string "YYYY-04-01"
+function getFYStartDate(fyStartYear: number): string {
+  return `${fyStartYear}-04-01`;
+}
+
+// Count how many extraProjects were created in the current FY
+function getNextProjectSeqId(): string {
+  const fyStart = getFYStartDate(getCurrentFYStart());
+  const count = state.extraProjects.filter(
+    (p) => (p.projectIssuedDate ?? "") >= fyStart
+  ).length;
+  return String(count + 1).padStart(2, "0");
+}
+
+// Build the display Project ID: just the zero-padded sequence number
+export function buildProjectDisplayId(): string {
+  return getNextProjectSeqId();
+}
+
 export const dhStore = {
   addClient(input: Omit<Client, "id" | "logo"> & { logo?: string }) {
-    const id = uid("c");
+    const nextNum = allClients().length + 1;
+    const id = String(nextNum).padStart(2, "0");
     const logo = (input.logo ?? input.name.slice(0, 2)).toUpperCase();
     const c: Client = { id, name: input.name, industry: input.industry, contact: input.contact, logo };
     state.extraClients.push(c);
@@ -899,6 +927,7 @@ export const dhStore = {
     sectionBComments?: string;
   }) {
     const id = uid("p");
+    const seqId = getNextProjectSeqId();
     const now = new Date().toISOString();
 
     // Auto-generate tasks from WBS services
@@ -951,6 +980,7 @@ export const dhStore = {
       invoiceValue: input.invoiceValue,
       sectionAComments: input.sectionAComments,
       sectionBComments: input.sectionBComments,
+      projectSeqId: seqId,
     };
     state.extraProjects.push(p);
 

@@ -123,6 +123,7 @@ export interface Project {
   invoiceValue?: number;
   sectionAComments?: string;
   sectionBComments?: string;
+  projectSeqId?: string; // FY-scoped sequential ID e.g. "01", "02" — resets each April 1
 }
 
 
