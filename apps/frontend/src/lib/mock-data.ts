@@ -134,10 +134,11 @@ export interface Client {
   industry: string;
   logo: string;
   contact: string;
-  clientType?: "NEW" | "OLD"; // Dhanshree: NEW or OLD for onboarding status
-  previousPmIds?: string[]; // Dhanshree: PMs who previously worked with this client
-  engagementManager?: string; // set during client onboarding
-  companyName?: string; // Sub-venture / End Customer Name
+  clientType?: "NEW" | "OLD";
+  previousPmIds?: string[];
+  engagementManager?: string;
+  companyName?: string;
+  subVentures?: string[]; // list of sub-ventures / end-customer divisions
 }
 
 export interface IssueComment {
@@ -229,16 +230,66 @@ export const getPerson = (id: string) => people.find((p) => p.id === id)!;
 
 // ---------- Clients ----------
 export const clients: Client[] = [
-  { id: "c1",  name: "Northwind Bank",      industry: "Banking",      logo: "NB", contact: "ops@northwind.com",        clientType: "OLD", previousPmIds: ["u3", "u4"],       engagementManager: "Rahul Sharma",    companyName: "Northwind Financial Services" },
-  { id: "c2",  name: "Helix Pharma",         industry: "Healthcare",   logo: "HP", contact: "it@helix.com",             clientType: "OLD", previousPmIds: ["u3", "u4", "u5"], engagementManager: "Pradeep Singh",   companyName: "Helix Life Sciences" },
-  { id: "c3",  name: "Orbit Retail",         industry: "Retail",       logo: "OR", contact: "tech@orbit.com",           clientType: "OLD", previousPmIds: ["u3"],             engagementManager: "Riya Kapoor",     companyName: "Orbit Commerce Pvt Ltd" },
-  { id: "c4",  name: "Zenith Logistics",     industry: "Logistics",    logo: "ZL", contact: "pm@zenith.com",            clientType: "NEW", previousPmIds: [],                 engagementManager: "Rahul Sharma",    companyName: "Zenith Supply Chain" },
-  { id: "c5",  name: "Lumen Energy",         industry: "Energy",       logo: "LE", contact: "digital@lumen.com",        clientType: "OLD", previousPmIds: ["u4", "u5"],       engagementManager: "Pradeep Singh",   companyName: "Lumen Power Solutions" },
-  { id: "c6",  name: "CloudSync AI",         industry: "Technology",   logo: "CA", contact: "contact@cloudsync.com",   clientType: "NEW", previousPmIds: [],                 engagementManager: "Riya Kapoor",     companyName: "CloudSync Technologies" },
-  { id: "c7",  name: "FinTech Global",       industry: "Finance",      logo: "FG", contact: "dev@fintechglobal.com",   clientType: "OLD", previousPmIds: ["u3", "u4"],       engagementManager: "Rahul Sharma",    companyName: "FinTech Global Ltd" },
-  { id: "c8",  name: "MediCare Plus",        industry: "Healthcare",   logo: "MP", contact: "tech@medicareplus.com",   clientType: "NEW", previousPmIds: [],                 engagementManager: "Pradeep Singh",   companyName: "MediCare Health Solutions" },
-  { id: "c9",  name: "EcoGreen Solutions",   industry: "Environment",  logo: "EG", contact: "projects@ecogreen.com",   clientType: "OLD", previousPmIds: ["u5"],             engagementManager: "Riya Kapoor",     companyName: "EcoGreen Sustainability" },
-  { id: "c10", name: "AutoDrive Systems",    industry: "Automotive",   logo: "AD", contact: "engineering@autodrive.com",clientType: "OLD", previousPmIds: ["u3", "u4", "u5"],engagementManager: "Rahul Sharma",    companyName: "AutoDrive Technologies" },
+  {
+    id: "c1", name: "Northwind Bank", industry: "Banking", logo: "NB",
+    contact: "ops@northwind.com", clientType: "OLD", previousPmIds: ["u3", "u4"],
+    engagementManager: "Rahul Sharma", companyName: "Northwind Financial Services",
+    subVentures: ["Northwind Retail Banking", "Northwind Corporate Banking", "Northwind Digital Payments", "Northwind Treasury Services", "Northwind Wealth Management"],
+  },
+  {
+    id: "c2", name: "Helix Pharma", industry: "Healthcare", logo: "HP",
+    contact: "it@helix.com", clientType: "OLD", previousPmIds: ["u3", "u4", "u5"],
+    engagementManager: "Pradeep Singh", companyName: "Helix Life Sciences",
+    subVentures: ["Helix Clinical Research", "Helix Biotech Division", "Helix Manufacturing", "Helix Global Healthcare", "Helix Medical Devices"],
+  },
+  {
+    id: "c3", name: "Orbit Retail", industry: "Retail", logo: "OR",
+    contact: "tech@orbit.com", clientType: "OLD", previousPmIds: ["u3"],
+    engagementManager: "Riya Kapoor", companyName: "Orbit Commerce Pvt Ltd",
+    subVentures: ["Orbit E-Commerce", "Orbit Hypermarket", "Orbit Fashion", "Orbit Supply Chain", "Orbit Digital Commerce"],
+  },
+  {
+    id: "c4", name: "Zenith Logistics", industry: "Logistics", logo: "ZL",
+    contact: "pm@zenith.com", clientType: "NEW", previousPmIds: [],
+    engagementManager: "Rahul Sharma", companyName: "Zenith Supply Chain",
+    subVentures: ["Zenith Freight Services", "Zenith Warehouse Operations", "Zenith International Logistics", "Zenith Fleet Management", "Zenith Express Delivery"],
+  },
+  {
+    id: "c5", name: "Lumen Energy", industry: "Energy", logo: "LE",
+    contact: "digital@lumen.com", clientType: "OLD", previousPmIds: ["u4", "u5"],
+    engagementManager: "Pradeep Singh", companyName: "Lumen Power Solutions",
+    subVentures: ["Lumen Renewable Energy", "Lumen Power Distribution", "Lumen Smart Grid", "Lumen Solar Division", "Lumen Energy Consulting"],
+  },
+  {
+    id: "c6", name: "CloudSync AI", industry: "Technology", logo: "CA",
+    contact: "contact@cloudsync.com", clientType: "NEW", previousPmIds: [],
+    engagementManager: "Riya Kapoor", companyName: "CloudSync Technologies",
+    subVentures: ["CloudSync AI Platform", "CloudSync Cloud Infrastructure", "CloudSync Data Engineering", "CloudSync Machine Learning", "CloudSync Enterprise Solutions"],
+  },
+  {
+    id: "c7", name: "FinTech Global", industry: "Finance", logo: "FG",
+    contact: "dev@fintechglobal.com", clientType: "OLD", previousPmIds: ["u3", "u4"],
+    engagementManager: "Rahul Sharma", companyName: "FinTech Global Ltd",
+    subVentures: ["FinTech Digital Banking", "FinTech Payment Solutions", "FinTech Lending", "FinTech Investment Services", "FinTech Risk & Compliance"],
+  },
+  {
+    id: "c8", name: "MediCare Plus", industry: "Healthcare", logo: "MP",
+    contact: "tech@medicareplus.com", clientType: "NEW", previousPmIds: [],
+    engagementManager: "Pradeep Singh", companyName: "MediCare Health Solutions",
+    subVentures: ["MediCare Hospital Systems", "MediCare Telemedicine", "MediCare Diagnostics", "MediCare Health Analytics", "MediCare Patient Services"],
+  },
+  {
+    id: "c9", name: "EcoGreen Solutions", industry: "Environment", logo: "EG",
+    contact: "projects@ecogreen.com", clientType: "OLD", previousPmIds: ["u5"],
+    engagementManager: "Riya Kapoor", companyName: "EcoGreen Sustainability",
+    subVentures: ["EcoGreen Waste Management", "EcoGreen Sustainability Consulting", "EcoGreen Renewable Projects", "EcoGreen Water Management", "EcoGreen Carbon Solutions"],
+  },
+  {
+    id: "c10", name: "AutoDrive Systems", industry: "Automotive", logo: "AD",
+    contact: "engineering@autodrive.com", clientType: "OLD", previousPmIds: ["u3", "u4", "u5"],
+    engagementManager: "Rahul Sharma", companyName: "AutoDrive Technologies",
+    subVentures: ["AutoDrive Connected Vehicles", "AutoDrive Autonomous Systems", "AutoDrive EV Solutions", "AutoDrive Manufacturing", "AutoDrive Smart Mobility"],
+  },
 ];
 
 // Senior PM (u1) is assigned c1, c2, c3. EM (u2) is assigned c2, c4, c5. PMO (u11) sees everything.
