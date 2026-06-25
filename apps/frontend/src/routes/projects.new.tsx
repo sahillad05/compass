@@ -260,8 +260,8 @@ function WbsNewProjectPage() {
         else {
           rows.push({
             rowId: svcId, taskId: `WBS-${String(rowNum + 1).padStart(2, "0")}`,
-            dept, name: svc.name, qty: 1, description: "", frequency: "One-time",
-            location: "Onsite", serviceModel: "Managed Services", deliveryModel: "Remote",
+            dept, name: svc.name, qty: 1, description: "", frequency: "Once",
+            location: "Onsite", serviceModel: "Initial Test", deliveryModel: "Remote",
             deliveryFormat: "PDF Report", billingModel: "100% Advance", tools: svc.tool,
             startDate: "", endDate: "", durationDays: svc.days, durationHrs: svc.days * 8,
             totalDays: svc.days, totalHrs: svc.days * 8, unitPrice: svc.unitPrice, total: svc.unitPrice,
@@ -301,6 +301,24 @@ function WbsNewProjectPage() {
         return updated;
       })
     );
+  }
+
+  // Duplicate a row immediately below the source row, overriding serviceModel
+  function duplicateRowAfter(rowId: string, serviceModel: "Initial Test" | "1 Re-test") {
+    setServiceRows((prev) => {
+      const idx = prev.findIndex((r) => r.rowId === rowId);
+      if (idx === -1) return prev;
+      const source = prev[idx];
+      const newRow: ServiceRow = {
+        ...source,
+        rowId: `${source.rowId}-dup-${Date.now()}`,
+        taskId: `${source.taskId}-${serviceModel === "Initial Test" ? "IT" : "RT"}`,
+        serviceModel,
+      };
+      const next = [...prev];
+      next.splice(idx + 1, 0, newRow);
+      return next;
+    });
   }
 
   // ─── Billing model change ────────────────────────────────────────────────
@@ -643,29 +661,23 @@ function WbsNewProjectPage() {
 
         {/* ── WBS Header Card ── */}
         <Card title="WBS Information">
+          {/* Row 1: Project Name + Engagement Manager */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 16 }}>
             <FormGroup label="Project Name" required>
               <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} style={inputStyle(false)} />
             </FormGroup>
-            <FormGroup label="Project ID (Auto)">
-              <input type="text" value={projectId} readOnly style={inputStyle(true)} />
+            <FormGroup label="Engagement Manager">
+              <input type="text" value={engagementManager} readOnly style={inputStyle(true)} />
             </FormGroup>
           </div>
+          {/* Row 2: Contract Type + Sales Person */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 16 }}>
             <FormGroup label="Contract Type" required>
               <select value={contractType} onChange={(e) => setContractType(e.target.value)} style={inputStyle(false)}>
                 <option value="">Select Contract Type</option>
-                <option value="Fixed">Fixed</option>
-                <option value="Time & Materials">Time & Materials</option>
+                <option value="Resource Based">Resource Based</option>
+                <option value="Scope Based">Scope Based</option>
               </select>
-            </FormGroup>
-            <FormGroup label="Engagement Manager">
-              <input
-                type="text"
-                value={engagementManager}
-                readOnly
-                style={inputStyle(true)}
-              />
             </FormGroup>
             <FormGroup label="Sales Person" required>
               <select value={salesPerson} onChange={(e) => setSalesPerson(e.target.value)} style={inputStyle(false)}>
@@ -676,12 +688,13 @@ function WbsNewProjectPage() {
               </select>
             </FormGroup>
           </div>
+          {/* Row 3: Project Type + Onboarding Date */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
             <FormGroup label="Project Type" required>
               <select value={projectType} onChange={(e) => { setProjectType(e.target.value); setBillingModel(""); setPaymentTerms(""); }} style={inputStyle(false)}>
                 <option value="">Select Project Type</option>
                 <option value="Ad-Hoc">Ad-Hoc</option>
-                <option value="Long Term">Long Term</option>
+                <option value="Long Term">Long Term (1 year plus)</option>
               </select>
             </FormGroup>
             <FormGroup label="Project Onboarding Date" required>
@@ -711,27 +724,27 @@ function WbsNewProjectPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead style={{ background: "#f3f4f6" }}>
                 <tr>
-                  <th style={thStyle}>Task ID</th>
-                  <th style={thStyle}>Department</th>
-                  <th style={thStyle}>Service Name</th>
-                  <th style={thStyle}>Qty</th>
-                  <th style={thStyle}>Description</th>
-                  <th style={thStyle}>Frequency</th>
-                  <th style={thStyle}>Location</th>
-                  <th style={thStyle}>Service Model</th>
-                  <th style={thStyle}>Delivery Model</th>
-                  <th style={thStyle}>Final Delivery Format</th>
-                  <th style={thStyle}>Billing Model</th>
-                  <th style={thStyle}>Tools</th>
-                  <th style={thStyle}>Start Date</th>
-                  <th style={thStyle}>End Date</th>
-                  <th style={thStyle}>Duration (Days)</th>
-                  <th style={thStyle}>Duration (Hrs)</th>
-                  <th style={thStyle}>Total Days</th>
-                  <th style={thStyle}>Total Hrs</th>
-                  <th style={thStyle}>Unit Price</th>
-                  <th style={thStyle}>Total</th>
-                  <th style={thStyle}></th>
+                  <th style={{ ...thStyle, minWidth: 100 }}>Task ID</th>
+                  <th style={{ ...thStyle, minWidth: 140 }}>Department</th>
+                  <th style={{ ...thStyle, minWidth: 200 }}>Service Name</th>
+                  <th style={{ ...thStyle, minWidth: 60 }}>Qty</th>
+                  <th style={{ ...thStyle, minWidth: 180 }}>Description</th>
+                  <th style={{ ...thStyle, minWidth: 120 }}>Frequency</th>
+                  <th style={{ ...thStyle, minWidth: 100 }}>Location</th>
+                  <th style={{ ...thStyle, minWidth: 140 }}>Service Model</th>
+                  <th style={{ ...thStyle, minWidth: 120 }}>Delivery Model</th>
+                  <th style={{ ...thStyle, minWidth: 140 }}>Final Delivery Format</th>
+                  <th style={{ ...thStyle, minWidth: 130 }}>Billing Model</th>
+                  <th style={{ ...thStyle, minWidth: 160 }}>Tools</th>
+                  <th style={{ ...thStyle, minWidth: 130 }}>Start Date</th>
+                  <th style={{ ...thStyle, minWidth: 130 }}>End Date</th>
+                  <th style={{ ...thStyle, minWidth: 80 }}>Duration (Days)</th>
+                  <th style={{ ...thStyle, minWidth: 80 }}>Duration (Hrs)</th>
+                  <th style={{ ...thStyle, minWidth: 80 }}>Total Days</th>
+                  <th style={{ ...thStyle, minWidth: 80 }}>Total Hrs</th>
+                  <th style={{ ...thStyle, minWidth: 100 }}>Unit Price</th>
+                  <th style={{ ...thStyle, minWidth: 100 }}>Total</th>
+                  <th style={{ ...thStyle, minWidth: 200 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -740,35 +753,65 @@ function WbsNewProjectPage() {
                 )}
                 {serviceRows.map((r) => (
                   <tr key={r.rowId}>
-                    <td style={tdStyle}><input type="text" value={r.taskId} onChange={(e) => updateRow(r.rowId, "taskId", e.target.value)} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="text" value={r.dept} readOnly style={{ ...tblInputStyle, background: "#f3f4f6" }} /></td>
-                    <td style={tdStyle}><input type="text" value={r.name} onChange={(e) => updateRow(r.rowId, "name", e.target.value)} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="number" value={r.qty} min={1} onChange={(e) => updateRow(r.rowId, "qty", Number(e.target.value))} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="text" value={r.description} onChange={(e) => updateRow(r.rowId, "description", e.target.value)} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="text" value={r.frequency} onChange={(e) => updateRow(r.rowId, "frequency", e.target.value)} style={tblInputStyle} /></td>
+                    <td style={tdStyle}><input type="text" value={r.taskId} onChange={(e) => updateRow(r.rowId, "taskId", e.target.value)} style={{ ...tblInputStyle, minWidth: 100 }} /></td>
+                    <td style={tdStyle}><input type="text" value={r.dept} readOnly style={{ ...tblInputStyle, background: "#f3f4f6", minWidth: 140 }} /></td>
+                    <td style={tdStyle}><input type="text" value={r.name} onChange={(e) => updateRow(r.rowId, "name", e.target.value)} style={{ ...tblInputStyle, minWidth: 200 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.qty} min={1} onChange={(e) => updateRow(r.rowId, "qty", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 60 }} /></td>
+                    <td style={tdStyle}><input type="text" value={r.description} onChange={(e) => updateRow(r.rowId, "description", e.target.value)} style={{ ...tblInputStyle, minWidth: 180 }} /></td>
                     <td style={tdStyle}>
-                      <select value={r.location} onChange={(e) => updateRow(r.rowId, "location", e.target.value)} style={tblInputStyle}>
+                      <select value={r.frequency} onChange={(e) => updateRow(r.rowId, "frequency", e.target.value)} style={{ ...tblInputStyle, minWidth: 120 }}>
+                        <option value="Once">Once</option>
+                        <option value="Quarterly-1">Quarterly-1</option>
+                        <option value="Half yearly">Half yearly</option>
+                        <option value="Yearly">Yearly</option>
+                      </select>
+                    </td>
+                    <td style={tdStyle}>
+                      <select value={r.location} onChange={(e) => updateRow(r.rowId, "location", e.target.value)} style={{ ...tblInputStyle, minWidth: 100 }}>
                         <option>Onsite</option><option>Offsite</option><option>Hybrid</option>
                       </select>
                     </td>
-                    <td style={tdStyle}><input type="text" value={r.serviceModel} onChange={(e) => updateRow(r.rowId, "serviceModel", e.target.value)} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="text" value={r.deliveryModel} onChange={(e) => updateRow(r.rowId, "deliveryModel", e.target.value)} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="text" value={r.deliveryFormat} onChange={(e) => updateRow(r.rowId, "deliveryFormat", e.target.value)} style={tblInputStyle} /></td>
                     <td style={tdStyle}>
-                      <select value={r.billingModel} onChange={(e) => updateRow(r.rowId, "billingModel", e.target.value)} style={tblInputStyle}>
+                      <select value={r.serviceModel} onChange={(e) => updateRow(r.rowId, "serviceModel", e.target.value)} style={{ ...tblInputStyle, minWidth: 140 }}>
+                        <option value="Initial Test">Initial Test</option>
+                        <option value="1 Re-test">1 Re-test</option>
+                      </select>
+                    </td>
+                    <td style={tdStyle}><input type="text" value={r.deliveryModel} onChange={(e) => updateRow(r.rowId, "deliveryModel", e.target.value)} style={{ ...tblInputStyle, minWidth: 120 }} /></td>
+                    <td style={tdStyle}><input type="text" value={r.deliveryFormat} onChange={(e) => updateRow(r.rowId, "deliveryFormat", e.target.value)} style={{ ...tblInputStyle, minWidth: 140 }} /></td>
+                    <td style={tdStyle}>
+                      <select value={r.billingModel} onChange={(e) => updateRow(r.rowId, "billingModel", e.target.value)} style={{ ...tblInputStyle, minWidth: 130 }}>
                         <option>100% Advance</option><option>Time &amp; Materials</option><option>Fixed</option>
                       </select>
                     </td>
-                    <td style={tdStyle}><input type="text" value={r.tools} onChange={(e) => updateRow(r.rowId, "tools", e.target.value)} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="date" value={r.startDate} onChange={(e) => updateRow(r.rowId, "startDate", e.target.value)} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="date" value={r.endDate} onChange={(e) => updateRow(r.rowId, "endDate", e.target.value)} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="number" value={r.durationDays} onChange={(e) => updateRow(r.rowId, "durationDays", Number(e.target.value))} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="number" value={r.durationHrs} onChange={(e) => updateRow(r.rowId, "durationHrs", Number(e.target.value))} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="number" value={r.totalDays} onChange={(e) => updateRow(r.rowId, "totalDays", Number(e.target.value))} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="number" value={r.totalHrs} onChange={(e) => updateRow(r.rowId, "totalHrs", Number(e.target.value))} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="number" value={r.unitPrice} min={0} onChange={(e) => updateRow(r.rowId, "unitPrice", Number(e.target.value))} style={tblInputStyle} /></td>
-                    <td style={tdStyle}><input type="number" value={r.total} readOnly style={{ ...tblInputStyle, background: "#f3f4f6" }} /></td>
-                    <td style={tdStyle}><button onClick={() => removeServiceRow(r.rowId)} style={{ background: "#ef4444", color: "#fff", border: "none", padding: "4px 8px", borderRadius: 4, cursor: "pointer", fontSize: 11 }}>✕</button></td>
+                    <td style={tdStyle}><input type="text" value={r.tools} onChange={(e) => updateRow(r.rowId, "tools", e.target.value)} style={{ ...tblInputStyle, minWidth: 160 }} /></td>
+                    <td style={tdStyle}><input type="date" value={r.startDate} onChange={(e) => updateRow(r.rowId, "startDate", e.target.value)} style={{ ...tblInputStyle, minWidth: 130 }} /></td>
+                    <td style={tdStyle}><input type="date" value={r.endDate} onChange={(e) => updateRow(r.rowId, "endDate", e.target.value)} style={{ ...tblInputStyle, minWidth: 130 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.durationDays} onChange={(e) => updateRow(r.rowId, "durationDays", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 80 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.durationHrs} onChange={(e) => updateRow(r.rowId, "durationHrs", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 80 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.totalDays} onChange={(e) => updateRow(r.rowId, "totalDays", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 80 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.totalHrs} onChange={(e) => updateRow(r.rowId, "totalHrs", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 80 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.unitPrice} min={0} onChange={(e) => updateRow(r.rowId, "unitPrice", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 100 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.total} readOnly style={{ ...tblInputStyle, background: "#f3f4f6", minWidth: 100 }} /></td>
+                    <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <button
+                          onClick={() => duplicateRowAfter(r.rowId, "Initial Test")}
+                          title="Duplicate row with Initial Test"
+                          style={{ background: "#1a84d4", color: "#fff", border: "none", padding: "4px 7px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontWeight: 600, whiteSpace: "nowrap" }}
+                        >+ Initial Test</button>
+                        <button
+                          onClick={() => duplicateRowAfter(r.rowId, "1 Re-test")}
+                          title="Duplicate row with 1 Re-test"
+                          style={{ background: "#7c3aed", color: "#fff", border: "none", padding: "4px 7px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontWeight: 600, whiteSpace: "nowrap" }}
+                        >+ 1 Re-test</button>
+                        <button
+                          onClick={() => removeServiceRow(r.rowId)}
+                          title="Remove row"
+                          style={{ background: "#ef4444", color: "#fff", border: "none", padding: "4px 8px", borderRadius: 4, cursor: "pointer", fontSize: 11 }}
+                        >✕</button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1004,12 +1047,14 @@ const inputStyle = (locked: boolean): React.CSSProperties => ({
 
 const thStyle: React.CSSProperties = {
   padding: "10px 8px", textAlign: "left", fontWeight: 600, color: "#1f2937",
-  border: "1px solid #d1d5db", whiteSpace: "nowrap",
+  border: "1px solid #d1d5db", whiteSpace: "nowrap", fontSize: 11,
 };
-const tdStyle: React.CSSProperties = { padding: 8, border: "1px solid #d1d5db" };
+const tdStyle: React.CSSProperties = {
+  padding: "6px 8px", border: "1px solid #d1d5db", verticalAlign: "middle",
+};
 const tblInputStyle: React.CSSProperties = {
-  width: "100%", padding: 6, border: "1px solid #d1d5db", borderRadius: 4, fontSize: 12,
-  boxSizing: "border-box", fontFamily: "inherit",
+  width: "100%", minWidth: 120, padding: "6px 8px", border: "1px solid #d1d5db",
+  borderRadius: 4, fontSize: 12, boxSizing: "border-box", fontFamily: "inherit",
 };
 
 function btnStyle(variant: "primary" | "secondary"): React.CSSProperties {

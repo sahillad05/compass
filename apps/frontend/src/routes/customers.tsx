@@ -158,7 +158,6 @@ interface NewClientState {
   companyOwner: string; engagementManager: string; phoneNumber: string; city: string; country: string;
   industry: string; businessType: string;
   createdAt: string; createdBy: string;
-  panNumber: string; gstNumber: string; msmeNumber: string;
   kycFile: File | null;
   contacts: ContactEntry[];
   notes: string;
@@ -178,7 +177,6 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
     industry: "", businessType: "",
     createdAt: new Date().toISOString(),
     createdBy: user?.name ?? "Unknown",
-    panNumber: "", gstNumber: "", msmeNumber: "",
     kycFile: null,
     contacts: [{ name: "", email: "", phone: "", designation: "" }],
     notes: "",
@@ -187,7 +185,7 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
   const u = (k: keyof Omit<NewClientState, "contacts" | "kycFile">, v: string) =>
     setS((p) => ({ ...p, [k]: v }));
 
-  const MAX_CONTACTS = 3;
+  const MAX_CONTACTS = 4;
 
   const addContact = () =>
     setS((p) =>
@@ -220,10 +218,14 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
     );
 
   const isStep2Valid = (): boolean =>
-    s.contacts.every((c) => c.name.trim() !== "" && c.email.trim() !== "") &&
-    s.panNumber.trim() !== "" &&
-    s.gstNumber.trim() !== "" &&
-    s.msmeNumber.trim() !== "";
+    s.contacts.every(
+      (c) =>
+        c.name.trim() !== "" &&
+        c.email.trim() !== "" &&
+        c.phone.trim() !== "" &&
+        c.designation.trim() !== ""
+    ) &&
+    s.kycFile !== null;
 
   const handleNext = () => {
     if (step === 1 && !isStep1Valid()) {
@@ -362,11 +364,11 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
                 <Field label="Email" required>
                   <input type="email" className={inputCls} value={ct.email} onChange={(e) => updateContact(idx, "email", e.target.value)} />
                 </Field>
-                <Field label="Phone">
+                <Field label="Phone" required>
                   <input className={inputCls} value={ct.phone} onChange={(e) => updateContact(idx, "phone", e.target.value)} />
                 </Field>
-                <Field label="Designation">
-                  <input className={inputCls} value={ct.designation} onChange={(e) => updateContact(idx, "designation", e.target.value)} />
+                <Field label="Designation" required>
+                  <input className={inputCls} placeholder="eg cisco/spoc etc." value={ct.designation} onChange={(e) => updateContact(idx, "designation", e.target.value)} />
                 </Field>
               </div>
               <div className="mt-3 flex items-center gap-2">
@@ -379,22 +381,13 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
                   <Plus className="h-3 w-3" /> Add
                 </button>
                 {s.contacts.length >= MAX_CONTACTS && (
-                  <span className="text-[11px] text-muted-foreground">Maximum of 3 contacts</span>
+                  <span className="text-[11px] text-muted-foreground">Maximum of 4 contacts</span>
                 )}
               </div>
             </div>
           ))}
-          <div className="grid gap-3 sm:grid-cols-2 mt-4 pt-4 border-t border-border">
-            <Field label="Company PAN Number" required>
-              <input className={inputCls} value={s.panNumber} onChange={(e) => u("panNumber", e.target.value)} />
-            </Field>
-            <Field label="GST Registration Number" required>
-              <input className={inputCls} value={s.gstNumber} onChange={(e) => u("gstNumber", e.target.value)} />
-            </Field>
-            <Field label="MSME Registration Number" required>
-              <input className={inputCls} value={s.msmeNumber} onChange={(e) => u("msmeNumber", e.target.value)} />
-            </Field>
-            <Field label="KYC Document">
+          <div className="mt-4 pt-4 border-t border-border">
+            <Field label="KYC Document" required>
               <div className="relative">
                 <label className={cn(
                   "flex h-9 w-full cursor-pointer items-center gap-2 rounded-md border border-dashed border-input bg-card px-3 text-sm transition-colors hover:bg-accent",
@@ -425,11 +418,12 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
                   ) : (
                     <>
                       <span className="text-muted-foreground">📎</span>
-                      <span className="text-xs text-muted-foreground">Click to attach KYC document</span>
+                      <span className="text-xs text-muted-foreground">Click to attach KYC document — any format accepted</span>
                     </>
                   )}
                 </label>
               </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">Required · PDF, image, Word, or any other format</p>
             </Field>
           </div>
           <Field label="Notes" className="pt-1">
@@ -455,9 +449,6 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
             <Row label="Business Type" v={s.businessType} />
             <Row label="Created At" v={format(new Date(s.createdAt), "dd MMM yyyy, HH:mm")} />
             <Row label="Created By" v={s.createdBy} />
-            <Row label="Company PAN Number" v={s.panNumber || "—"} />
-            <Row label="GST Registration Number" v={s.gstNumber || "—"} />
-            <Row label="MSME Registration Number" v={s.msmeNumber || "—"} />
             <Row label="KYC Document" v={s.kycFile ? s.kycFile.name : "—"} />
           </dl>
           <div className="mt-3 space-y-2">
