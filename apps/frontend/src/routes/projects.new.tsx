@@ -153,6 +153,23 @@ function WbsNewProjectPage() {
 
   if (!isDhanshree) return <Navigate to="/" />;
 
+  // ── Working-day helpers ──────────────────────────────────────────────────
+  // Add N working days (Mon–Fri) to a YYYY-MM-DD string, returns YYYY-MM-DD
+  function addWorkingDays(startIso: string, days: number): string {
+    const d = new Date(startIso);
+    let remaining = days;
+    while (remaining > 0) {
+      d.setDate(d.getDate() + 1);
+      const dow = d.getDay(); // 0=Sun, 6=Sat
+      if (dow !== 0 && dow !== 6) remaining--;
+    }
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  }
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   // ── Header fields ──
   const [projectName, setProjectName] = useState("");
   const projectId = buildProjectDisplayId();
@@ -262,7 +279,8 @@ function WbsNewProjectPage() {
             dept, name: svc.name, qty: 1, description: "", frequency: "",
             location: "", locationText: "", serviceModel: "",
             deliveryFormat: "PDF Report", tools: svc.tool,
-            startDate: "", endDate: "", durationDays: svc.days, durationHrs: svc.days * 8,
+            startDate: todayIso, endDate: addWorkingDays(todayIso, svc.days),
+            durationDays: svc.days, durationHrs: svc.days * 8,
             totalDays: svc.days, totalHrs: svc.days * 8, unitPrice: svc.unitPrice, total: svc.unitPrice,
           });
         }
@@ -305,6 +323,15 @@ function WbsNewProjectPage() {
         if (field === "qty" || field === "durationHrs") {
           updated.totalHrs = Number(updated.qty) * Number(updated.durationHrs);
         }
+        // Recalculate WBS End Date whenever startDate or totalDays change
+        if (field === "startDate" || field === "qty" || field === "durationDays") {
+          const days = field === "durationDays"
+            ? Number(updated.qty) * Number(value)
+            : updated.totalDays;
+          if (updated.startDate && days > 0) {
+            updated.endDate = addWorkingDays(updated.startDate, days);
+          }
+        }
         return updated;
       })
     );
@@ -325,7 +352,6 @@ function WbsNewProjectPage() {
       if (!r.deliveryFormat.trim()) return `Row ${n}: Final Delivery Format is required`;
       if (!r.tools.trim())        return `Row ${n}: Tools is required`;
       if (!r.startDate)           return `Row ${n}: WBS Start Date is required`;
-      if (!r.endDate)             return `Row ${n}: WBS End Date is required`;
       if (!r.durationDays)        return `Row ${n}: Duration (Days) is required`;
       if (!r.durationHrs)         return `Row ${n}: Duration (Hrs) is required`;
       if (!r.totalDays)           return `Row ${n}: Total Days is required`;
@@ -831,7 +857,7 @@ function WbsNewProjectPage() {
                     <td style={tdStyle}><input type="text" value={r.deliveryFormat} onChange={(e) => updateRow(r.rowId, "deliveryFormat", e.target.value)} style={{ ...req(r.deliveryFormat), minWidth: 140 }} /></td>
                     <td style={tdStyle}><input type="text" value={r.tools} onChange={(e) => updateRow(r.rowId, "tools", e.target.value)} style={{ ...req(r.tools), minWidth: 160 }} /></td>
                     <td style={tdStyle}><input type="date" value={r.startDate} onChange={(e) => updateRow(r.rowId, "startDate", e.target.value)} style={{ ...req(r.startDate), minWidth: 140 }} /></td>
-                    <td style={tdStyle}><input type="date" value={r.endDate} onChange={(e) => updateRow(r.rowId, "endDate", e.target.value)} style={{ ...req(r.endDate), minWidth: 140 }} /></td>
+                    <td style={tdStyle}><input type="date" value={r.endDate} readOnly style={{ ...tblInputStyle, background: "#f3f4f6", minWidth: 140 }} title="Auto-calculated from Start Date + Total Days (working days only)" /></td>
                     <td style={tdStyle}><input type="number" value={r.durationDays} onChange={(e) => updateRow(r.rowId, "durationDays", Number(e.target.value))} style={{ ...req(r.durationDays), minWidth: 80 }} /></td>
                     <td style={tdStyle}><input type="number" value={r.durationHrs} onChange={(e) => updateRow(r.rowId, "durationHrs", Number(e.target.value))} style={{ ...req(r.durationHrs), minWidth: 80 }} /></td>
                     <td style={tdStyle}><input type="number" value={r.totalDays} onChange={(e) => updateRow(r.rowId, "totalDays", Number(e.target.value))} style={{ ...req(r.totalDays), minWidth: 80 }} /></td>
