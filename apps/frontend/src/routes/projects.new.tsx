@@ -74,7 +74,7 @@ const DEPT_SERVICES: Record<string, { id: string; name: string; tool: string; un
 };
 
 const BILLING_MODELS: Record<string, string[]> = {
-  "Ad-Hoc": ["100% Advance", "70% Advance + 30% on Delivery", "50% Advance + 50% on Delivery", "50% Advance + 25% on Initial Assessment + 25% on Delivery", "Custom"],
+  "Ad-Hoc": ["100% Advance", "70% Advance + 30% on Delivery", "50% Advance + 50% on Delivery", "Custom"],
   "Long Term": ["Monthly Arrears", "Monthly Advance", "Quarterly Arrears", "Quarterly Advance"],
 };
 
@@ -117,11 +117,10 @@ interface ServiceRow {
   qty: number;
   description: string;
   frequency: string;
-  location: string;
+  location: string;       // Project Onside — dropdown (Onsite/Offsite/Hybrid)
+  locationText: string;   // Location — free text
   serviceModel: string;
-  deliveryModel: string;
   deliveryFormat: string;
-  billingModel: string;
   tools: string;
   startDate: string;
   endDate: string;
@@ -260,9 +259,9 @@ function WbsNewProjectPage() {
         else {
           rows.push({
             rowId: svcId, taskId: `WBS-${String(rowNum + 1).padStart(2, "0")}`,
-            dept, name: svc.name, qty: 1, description: "", frequency: "Once",
-            location: "Onsite", serviceModel: "Initial Test", deliveryModel: "Remote",
-            deliveryFormat: "PDF Report", billingModel: "100% Advance", tools: svc.tool,
+            dept, name: svc.name, qty: 1, description: "", frequency: "",
+            location: "", locationText: "", serviceModel: "",
+            deliveryFormat: "PDF Report", tools: svc.tool,
             startDate: "", endDate: "", durationDays: svc.days, durationHrs: svc.days * 8,
             totalDays: svc.days, totalHrs: svc.days * 8, unitPrice: svc.unitPrice, total: svc.unitPrice,
           });
@@ -295,42 +294,53 @@ function WbsNewProjectPage() {
       prev.map((r) => {
         if (r.rowId !== rowId) return r;
         const updated = { ...r, [field]: value };
+        // Recalculate total when qty or unitPrice changes
         if (field === "qty" || field === "unitPrice") {
           updated.total = Number(updated.qty) * Number(updated.unitPrice);
+        }
+        // Recalculate totalDays and totalHrs when qty, durationDays or durationHrs changes
+        if (field === "qty" || field === "durationDays") {
+          updated.totalDays = Number(updated.qty) * Number(updated.durationDays);
+        }
+        if (field === "qty" || field === "durationHrs") {
+          updated.totalHrs = Number(updated.qty) * Number(updated.durationHrs);
         }
         return updated;
       })
     );
   }
 
-  // Duplicate a row immediately below the source row, overriding serviceModel
-  function duplicateRowAfter(rowId: string, serviceModel: "Initial Test" | "1 Re-test") {
-    setServiceRows((prev) => {
-      const idx = prev.findIndex((r) => r.rowId === rowId);
-      if (idx === -1) return prev;
-      const source = prev[idx];
-      const newRow: ServiceRow = {
-        ...source,
-        rowId: `${source.rowId}-dup-${Date.now()}`,
-        taskId: `${source.taskId}-${serviceModel === "Initial Test" ? "IT" : "RT"}`,
-        serviceModel,
-      };
-      const next = [...prev];
-      next.splice(idx + 1, 0, newRow);
-      return next;
-    });
+  // Validate all service rows — returns first error message or null
+  function validateServiceRows(): string | null {
+    for (let i = 0; i < serviceRows.length; i++) {
+      const r = serviceRows[i];
+      const n = i + 1;
+      if (!r.taskId.trim())       return `Row ${n}: Activity ID is required`;
+      if (!r.name.trim())         return `Row ${n}: Service Name is required`;
+      if (!r.frequency)           return `Row ${n}: Frequency is required`;
+      if (!r.location)            return `Row ${n}: Project Onside is required`;
+      if (r.location === "Offsite" && !r.locationText.trim())
+                                  return `Row ${n}: Location (address) is required for Offsite`;
+      if (!r.serviceModel)        return `Row ${n}: Service Model is required`;
+      if (!r.deliveryFormat.trim()) return `Row ${n}: Final Delivery Format is required`;
+      if (!r.tools.trim())        return `Row ${n}: Tools is required`;
+      if (!r.startDate)           return `Row ${n}: WBS Start Date is required`;
+      if (!r.endDate)             return `Row ${n}: WBS End Date is required`;
+      if (!r.durationDays)        return `Row ${n}: Duration (Days) is required`;
+      if (!r.durationHrs)         return `Row ${n}: Duration (Hrs) is required`;
+      if (!r.totalDays)           return `Row ${n}: Total Days is required`;
+      if (!r.totalHrs)            return `Row ${n}: Total Hrs is required`;
+      if (!r.unitPrice)           return `Row ${n}: Unit Price is required`;
+    }
+    return null;
   }
 
   // ─── Billing model change ────────────────────────────────────────────────
 
   function onBillingModelChange(model: string) {
     setBillingModel(model);
-    if (model === "Custom") {
-      setPaymentTerms("");
-    } else {
-      const terms = PAYMENT_TERMS_MAP[model];
-      setPaymentTerms(terms ? terms[0] : "");
-    }
+    // Payment Terms is only editable when Custom — always clear it on any change
+    setPaymentTerms("");
     // Build invoice rows from template
     const template = INVOICE_TEMPLATES[model];
     if (!template) { setInvoiceRows([]); return; }
@@ -374,8 +384,8 @@ function WbsNewProjectPage() {
       services: serviceRows.map((r) => ({
         id: r.rowId, department: r.dept, serviceName: r.name,
         qty: r.qty, description: r.description, frequency: r.frequency,
-        location: r.location, serviceModel: r.serviceModel, deliveryModel: r.deliveryModel,
-        finalDeliveryFormat: r.deliveryFormat, billingModel: r.billingModel,
+        location: r.location, locationText: r.locationText, serviceModel: r.serviceModel,
+        finalDeliveryFormat: r.deliveryFormat,
         tools: r.tools, startDate: r.startDate, endDate: r.endDate,
         duration: r.durationDays, unitPrice: r.unitPrice, total: r.total,
         totalDays: r.totalDays, totalHrs: r.totalHrs,
@@ -394,6 +404,11 @@ function WbsNewProjectPage() {
   function handleSaveDraft() {
     if (!projectName.trim()) { toast.error("Project Name is required"); return; }
     if (!selectedClientId) { toast.error("Please select a client"); return; }
+    if (billingModel === "Custom" && !paymentTerms.trim()) { toast.error("Payment Terms is required when Billing Model is Custom"); return; }
+    if (serviceRows.length > 0) {
+      const err = validateServiceRows();
+      if (err) { toast.error(err); return; }
+    }
     const proj = dhStore.addProject({
       name: projectName, clientId: selectedClientId,
       description: sectionAComments,
@@ -414,6 +429,9 @@ function WbsNewProjectPage() {
     if (!projectName.trim()) { toast.error("Project Name is required"); return; }
     if (!selectedClientId) { toast.error("Please select a client"); return; }
     if (serviceRows.length === 0) { toast.error("Please add at least one service"); return; }
+    if (billingModel === "Custom" && !paymentTerms.trim()) { toast.error("Payment Terms is required when Billing Model is Custom"); return; }
+    const err = validateServiceRows();
+    if (err) { toast.error(err); return; }
     const proj = dhStore.addProject({
       name: projectName, clientId: selectedClientId,
       description: sectionAComments,
@@ -724,42 +742,51 @@ function WbsNewProjectPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead style={{ background: "#f3f4f6" }}>
                 <tr>
-                  <th style={{ ...thStyle, minWidth: 100 }}>Task ID</th>
+                  <th style={{ ...thStyle, minWidth: 100 }}>Activity ID</th>
                   <th style={{ ...thStyle, minWidth: 140 }}>Department</th>
                   <th style={{ ...thStyle, minWidth: 200 }}>Service Name</th>
                   <th style={{ ...thStyle, minWidth: 60 }}>Qty</th>
                   <th style={{ ...thStyle, minWidth: 180 }}>Description</th>
                   <th style={{ ...thStyle, minWidth: 120 }}>Frequency</th>
-                  <th style={{ ...thStyle, minWidth: 100 }}>Location</th>
+                  <th style={{ ...thStyle, minWidth: 110 }}>Project Onside</th>
+                  <th style={{ ...thStyle, minWidth: 140 }}>Location</th>
                   <th style={{ ...thStyle, minWidth: 140 }}>Service Model</th>
-                  <th style={{ ...thStyle, minWidth: 120 }}>Delivery Model</th>
                   <th style={{ ...thStyle, minWidth: 140 }}>Final Delivery Format</th>
-                  <th style={{ ...thStyle, minWidth: 130 }}>Billing Model</th>
                   <th style={{ ...thStyle, minWidth: 160 }}>Tools</th>
-                  <th style={{ ...thStyle, minWidth: 130 }}>Start Date</th>
-                  <th style={{ ...thStyle, minWidth: 130 }}>End Date</th>
+                  <th style={{ ...thStyle, minWidth: 140 }}>WBS Start Date</th>
+                  <th style={{ ...thStyle, minWidth: 140 }}>WBS End Date</th>
                   <th style={{ ...thStyle, minWidth: 80 }}>Duration (Days)</th>
                   <th style={{ ...thStyle, minWidth: 80 }}>Duration (Hrs)</th>
                   <th style={{ ...thStyle, minWidth: 80 }}>Total Days</th>
                   <th style={{ ...thStyle, minWidth: 80 }}>Total Hrs</th>
                   <th style={{ ...thStyle, minWidth: 100 }}>Unit Price</th>
                   <th style={{ ...thStyle, minWidth: 100 }}>Total</th>
-                  <th style={{ ...thStyle, minWidth: 200 }}></th>
+                  <th style={{ ...thStyle, minWidth: 50 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {serviceRows.length === 0 && (
-                  <tr><td colSpan={21} style={{ ...tdStyle, textAlign: "center", color: "#6b7280", padding: 32 }}>No services added. Click "+ Add Services" to begin.</td></tr>
+                  <tr><td colSpan={20} style={{ ...tdStyle, textAlign: "center", color: "#6b7280", padding: 32 }}>No services added. Click "+ Add Services" to begin.</td></tr>
                 )}
-                {serviceRows.map((r) => (
+                {serviceRows.map((r) => {
+                  // helper: red border on empty required cells
+                  const req = (val: string | number) =>
+                    !val || (typeof val === "string" && !val.trim())
+                      ? { ...tblInputStyle, border: "1.5px solid #ef4444" }
+                      : tblInputStyle;
+                  const reqSel = (val: string) =>
+                    !val ? { ...tblInputStyle, border: "1.5px solid #ef4444" } : tblInputStyle;
+                  const isOffsite = r.location === "Offsite";
+                  return (
                   <tr key={r.rowId}>
-                    <td style={tdStyle}><input type="text" value={r.taskId} onChange={(e) => updateRow(r.rowId, "taskId", e.target.value)} style={{ ...tblInputStyle, minWidth: 100 }} /></td>
+                    <td style={tdStyle}><input type="text" value={r.taskId} onChange={(e) => updateRow(r.rowId, "taskId", e.target.value)} style={{ ...req(r.taskId), minWidth: 100 }} /></td>
                     <td style={tdStyle}><input type="text" value={r.dept} readOnly style={{ ...tblInputStyle, background: "#f3f4f6", minWidth: 140 }} /></td>
-                    <td style={tdStyle}><input type="text" value={r.name} onChange={(e) => updateRow(r.rowId, "name", e.target.value)} style={{ ...tblInputStyle, minWidth: 200 }} /></td>
+                    <td style={tdStyle}><input type="text" value={r.name} onChange={(e) => updateRow(r.rowId, "name", e.target.value)} style={{ ...req(r.name), minWidth: 200 }} /></td>
                     <td style={tdStyle}><input type="number" value={r.qty} min={1} onChange={(e) => updateRow(r.rowId, "qty", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 60 }} /></td>
                     <td style={tdStyle}><input type="text" value={r.description} onChange={(e) => updateRow(r.rowId, "description", e.target.value)} style={{ ...tblInputStyle, minWidth: 180 }} /></td>
                     <td style={tdStyle}>
-                      <select value={r.frequency} onChange={(e) => updateRow(r.rowId, "frequency", e.target.value)} style={{ ...tblInputStyle, minWidth: 120 }}>
+                      <select value={r.frequency} onChange={(e) => updateRow(r.rowId, "frequency", e.target.value)} style={{ ...reqSel(r.frequency), minWidth: 120 }}>
+                        <option value="">— Select —</option>
                         <option value="Once">Once</option>
                         <option value="Quarterly-1">Quarterly-1</option>
                         <option value="Half yearly">Half yearly</option>
@@ -767,53 +794,60 @@ function WbsNewProjectPage() {
                       </select>
                     </td>
                     <td style={tdStyle}>
-                      <select value={r.location} onChange={(e) => updateRow(r.rowId, "location", e.target.value)} style={{ ...tblInputStyle, minWidth: 100 }}>
+                      <select value={r.location} onChange={(e) => {
+                        updateRow(r.rowId, "location", e.target.value);
+                        // clear locationText if switching away from Offsite
+                        if (e.target.value !== "Offsite") updateRow(r.rowId, "locationText", "");
+                      }} style={{ ...reqSel(r.location), minWidth: 110 }}>
+                        <option value="">— Select —</option>
                         <option>Onsite</option><option>Offsite</option><option>Hybrid</option>
                       </select>
                     </td>
                     <td style={tdStyle}>
-                      <select value={r.serviceModel} onChange={(e) => updateRow(r.rowId, "serviceModel", e.target.value)} style={{ ...tblInputStyle, minWidth: 140 }}>
+                      <input
+                        type="text"
+                        value={r.locationText}
+                        onChange={(e) => updateRow(r.rowId, "locationText", e.target.value)}
+                        placeholder={isOffsite ? "Enter location…" : "—"}
+                        readOnly={!isOffsite}
+                        style={{
+                          ...tblInputStyle,
+                          minWidth: 140,
+                          ...(isOffsite
+                            ? (!r.locationText.trim() ? { border: "1.5px solid #ef4444" } : {})
+                            : { background: "#f3f4f6", color: "#9ca3af", cursor: "not-allowed" }),
+                        }}
+                      />
+                    </td>
+                    <td style={tdStyle}>
+                      <select value={r.serviceModel} onChange={(e) => updateRow(r.rowId, "serviceModel", e.target.value)} style={{ ...reqSel(r.serviceModel), minWidth: 140 }}>
+                        <option value="">— Select —</option>
                         <option value="Initial Test">Initial Test</option>
                         <option value="1 Re-test">1 Re-test</option>
+                        <option value="2 Re-test">2 Re-test</option>
+                        <option value="3 Re-test">3 Re-test</option>
                       </select>
                     </td>
-                    <td style={tdStyle}><input type="text" value={r.deliveryModel} onChange={(e) => updateRow(r.rowId, "deliveryModel", e.target.value)} style={{ ...tblInputStyle, minWidth: 120 }} /></td>
-                    <td style={tdStyle}><input type="text" value={r.deliveryFormat} onChange={(e) => updateRow(r.rowId, "deliveryFormat", e.target.value)} style={{ ...tblInputStyle, minWidth: 140 }} /></td>
-                    <td style={tdStyle}>
-                      <select value={r.billingModel} onChange={(e) => updateRow(r.rowId, "billingModel", e.target.value)} style={{ ...tblInputStyle, minWidth: 130 }}>
-                        <option>100% Advance</option><option>Time &amp; Materials</option><option>Fixed</option>
-                      </select>
-                    </td>
-                    <td style={tdStyle}><input type="text" value={r.tools} onChange={(e) => updateRow(r.rowId, "tools", e.target.value)} style={{ ...tblInputStyle, minWidth: 160 }} /></td>
-                    <td style={tdStyle}><input type="date" value={r.startDate} onChange={(e) => updateRow(r.rowId, "startDate", e.target.value)} style={{ ...tblInputStyle, minWidth: 130 }} /></td>
-                    <td style={tdStyle}><input type="date" value={r.endDate} onChange={(e) => updateRow(r.rowId, "endDate", e.target.value)} style={{ ...tblInputStyle, minWidth: 130 }} /></td>
-                    <td style={tdStyle}><input type="number" value={r.durationDays} onChange={(e) => updateRow(r.rowId, "durationDays", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 80 }} /></td>
-                    <td style={tdStyle}><input type="number" value={r.durationHrs} onChange={(e) => updateRow(r.rowId, "durationHrs", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 80 }} /></td>
-                    <td style={tdStyle}><input type="number" value={r.totalDays} onChange={(e) => updateRow(r.rowId, "totalDays", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 80 }} /></td>
-                    <td style={tdStyle}><input type="number" value={r.totalHrs} onChange={(e) => updateRow(r.rowId, "totalHrs", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 80 }} /></td>
-                    <td style={tdStyle}><input type="number" value={r.unitPrice} min={0} onChange={(e) => updateRow(r.rowId, "unitPrice", Number(e.target.value))} style={{ ...tblInputStyle, minWidth: 100 }} /></td>
+                    <td style={tdStyle}><input type="text" value={r.deliveryFormat} onChange={(e) => updateRow(r.rowId, "deliveryFormat", e.target.value)} style={{ ...req(r.deliveryFormat), minWidth: 140 }} /></td>
+                    <td style={tdStyle}><input type="text" value={r.tools} onChange={(e) => updateRow(r.rowId, "tools", e.target.value)} style={{ ...req(r.tools), minWidth: 160 }} /></td>
+                    <td style={tdStyle}><input type="date" value={r.startDate} onChange={(e) => updateRow(r.rowId, "startDate", e.target.value)} style={{ ...req(r.startDate), minWidth: 140 }} /></td>
+                    <td style={tdStyle}><input type="date" value={r.endDate} onChange={(e) => updateRow(r.rowId, "endDate", e.target.value)} style={{ ...req(r.endDate), minWidth: 140 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.durationDays} onChange={(e) => updateRow(r.rowId, "durationDays", Number(e.target.value))} style={{ ...req(r.durationDays), minWidth: 80 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.durationHrs} onChange={(e) => updateRow(r.rowId, "durationHrs", Number(e.target.value))} style={{ ...req(r.durationHrs), minWidth: 80 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.totalDays} onChange={(e) => updateRow(r.rowId, "totalDays", Number(e.target.value))} style={{ ...req(r.totalDays), minWidth: 80 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.totalHrs} onChange={(e) => updateRow(r.rowId, "totalHrs", Number(e.target.value))} style={{ ...req(r.totalHrs), minWidth: 80 }} /></td>
+                    <td style={tdStyle}><input type="number" value={r.unitPrice} min={0} onChange={(e) => updateRow(r.rowId, "unitPrice", Number(e.target.value))} style={{ ...req(r.unitPrice), minWidth: 100 }} /></td>
                     <td style={tdStyle}><input type="number" value={r.total} readOnly style={{ ...tblInputStyle, background: "#f3f4f6", minWidth: 100 }} /></td>
-                    <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <button
-                          onClick={() => duplicateRowAfter(r.rowId, "Initial Test")}
-                          title="Duplicate row with Initial Test"
-                          style={{ background: "#1a84d4", color: "#fff", border: "none", padding: "4px 7px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontWeight: 600, whiteSpace: "nowrap" }}
-                        >+ Initial Test</button>
-                        <button
-                          onClick={() => duplicateRowAfter(r.rowId, "1 Re-test")}
-                          title="Duplicate row with 1 Re-test"
-                          style={{ background: "#7c3aed", color: "#fff", border: "none", padding: "4px 7px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontWeight: 600, whiteSpace: "nowrap" }}
-                        >+ 1 Re-test</button>
-                        <button
-                          onClick={() => removeServiceRow(r.rowId)}
-                          title="Remove row"
-                          style={{ background: "#ef4444", color: "#fff", border: "none", padding: "4px 8px", borderRadius: 4, cursor: "pointer", fontSize: 11 }}
-                        >✕</button>
-                      </div>
+                    <td style={tdStyle}>
+                      <button
+                        onClick={() => removeServiceRow(r.rowId)}
+                        title="Remove row"
+                        style={{ background: "#ef4444", color: "#fff", border: "none", padding: "4px 8px", borderRadius: 4, cursor: "pointer", fontSize: 11 }}
+                      >✕</button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -855,25 +889,40 @@ function WbsNewProjectPage() {
         <Card title="Section B: Accounts Team Details">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 16 }}>
             <FormGroup label="Billing Model" required>
-              <select value={billingModel} onChange={(e) => onBillingModelChange(e.target.value)} style={inputStyle(false)}>
-                <option value="">Select Billing Model</option>
+              <select
+                value={billingModel}
+                disabled={!projectType}
+                onChange={(e) => onBillingModelChange(e.target.value)}
+                style={inputStyle(!projectType)}
+                title={!projectType ? "Select a Project Type in WBS Information first" : ""}
+              >
+                {!projectType
+                  ? <option value="">⚠ Select Project Type first</option>
+                  : <option value="">Select Billing Model</option>
+                }
                 {(BILLING_MODELS[projectType] || []).map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </FormGroup>
-            <FormGroup label="Payment Terms">
+            <FormGroup label={`Payment Terms${billingModel === "Custom" ? " *" : ""}`}>
               {billingModel === "Custom" ? (
                 <input
                   type="text"
                   value={paymentTerms}
                   onChange={(e) => setPaymentTerms(e.target.value)}
-                  placeholder="Enter custom payment terms..."
-                  style={inputStyle(false)}
+                  placeholder="Enter custom payment terms…"
+                  style={{
+                    ...inputStyle(false),
+                    border: !paymentTerms.trim() ? "1.5px solid #ef4444" : undefined,
+                  }}
                 />
               ) : (
-                <select value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} style={inputStyle(false)}>
-                  <option value="">Select Payment Terms</option>
-                  {(PAYMENT_TERMS_MAP[billingModel] || []).map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <input
+                  type="text"
+                  value={paymentTerms}
+                  readOnly
+                  placeholder={billingModel ? "Auto-set by billing model" : "—"}
+                  style={inputStyle(true)}
+                />
               )}
             </FormGroup>
           </div>
