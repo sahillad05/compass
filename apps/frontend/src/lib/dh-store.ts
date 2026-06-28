@@ -375,6 +375,7 @@ export interface TaskAssignmentState {
 interface DhState {
   extraClients: Client[];
   extraProjects: Project[];
+  subVentureOverrides: Record<string, string[]>; // clientId → additional sub-ventures added at runtime
   issues: DhIssue[];
   alerts: DhAlert[];
   escalations: DhEscalation[];
@@ -402,6 +403,7 @@ let snapshot: DhState;
 const state: DhState = {
   extraClients: [],
   extraProjects: [],
+  subVentureOverrides: {},
   onboardedResources: [
     { employeeId: "EMP-0021", name: "Priya Sharma", department: "Engineering", subDepartment: "Frontend", joiningDate: "2026-05-12", designation: "Software Engineer", currentProject: "Core Banking Modernization", status: "Probation" },
     { employeeId: "EMP-0022", name: "Rohan Mehta", department: "QA", subDepartment: "Automation", joiningDate: "2026-05-20", designation: "QA Engineer", currentProject: "Mobile Banking App v3", status: "Probation" },
@@ -850,7 +852,13 @@ function subscribe(l: () => void) {
 
 // ---------- Selectors ----------
 export function allClients(): Client[] {
-  return [...baseClients, ...state.extraClients];
+  // Merge base clients with any runtime sub-venture additions — no duplication
+  const merged = baseClients.map((c) => {
+    const extra = state.subVentureOverrides[c.id];
+    if (!extra || extra.length === 0) return c;
+    return { ...c, subVentures: [...(c.subVentures ?? []), ...extra] };
+  });
+  return [...merged, ...state.extraClients];
 }
 export function allProjects(): Project[] {
   return [...baseProjects, ...state.extraProjects];
@@ -923,10 +931,33 @@ export const dhStore = {
       logo,
       engagementManager: input.engagementManager,
       companyName: input.companyName,
+      // If a sub-venture name was provided during onboarding, seed subVentures with it
+      subVentures: input.companyName?.trim()
+        ? [...(input.subVentures ?? []), input.companyName.trim()]
+        : (input.subVentures ?? []),
     };
     state.extraClients.push(c);
     emit();
     return c;
+  },
+
+  // Add a new sub-venture name to an existing client's subVentures list
+  addSubVenture(clientId: string, subVentureName: string) {
+    const trimmed = subVentureName.trim();
+    if (!trimmed) return;
+    // For extra clients created at runtime, mutate directly
+    const extra = state.extraClients.find((c) => c.id === clientId);
+    if (extra) {
+      extra.subVentures = [...(extra.subVentures ?? []), trimmed];
+      emit();
+      return;
+    }
+    // For base clients, store additions in subVentureOverrides — no duplicate client entries
+    state.subVentureOverrides[clientId] = [
+      ...(state.subVentureOverrides[clientId] ?? []),
+      trimmed,
+    ];
+    emit();
   },
   addProject(input: {
     name: string;

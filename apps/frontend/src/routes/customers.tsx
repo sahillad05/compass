@@ -170,6 +170,18 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
   const { user } = useRoleContext();
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+
+  // ── TK Customer search state ──
+  const existingClients = allClients();
+  const [tkSearch, setTkSearch] = useState("");
+  const [tkDropOpen, setTkDropOpen] = useState(false);
+  const [selectedExisting, setSelectedExisting] = useState<typeof existingClients[0] | null>(null);
+
+  const filteredTk = existingClients.filter((c) =>
+    tkSearch.trim() === "" ||
+    c.name.toLowerCase().includes(tkSearch.toLowerCase())
+  );
+
   const [s, setS] = useState<NewClientState>(() => ({
     clientName: "", companyName: "",
     customerId: "C" + String(allClients().length + 1).padStart(3, "0"),
@@ -204,10 +216,11 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
     }));
 
   // All 9 required fields on step 1 must be non-empty
-  const isStep1Valid = (): boolean =>
-    !!(
+  const isStep1Valid = (): boolean => {
+    if (!s.companyName.trim()) return false; // Sub-venture always required
+    if (selectedExisting) return true; // existing client — rest auto-filled
+    return !!(
       s.clientName.trim() &&
-      s.companyName.trim() &&
       s.companyOwner.trim() &&
       s.engagementManager.trim() &&
       s.phoneNumber.trim() &&
@@ -216,6 +229,7 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
       s.industry.trim() &&
       s.businessType.trim()
     );
+  };
 
   const isStep2Valid = (): boolean =>
     s.contacts.every(
@@ -244,14 +258,21 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
   const submit = () => {
     setSubmitting(true);
     setTimeout(() => {
-      dhStore.addClient({
-        name: s.clientName || s.companyName,
-        industry: s.industry || "Other",
-        contact: s.contacts[0]?.email ?? "",
-        engagementManager: s.engagementManager,
-        companyName: s.companyName,
-      });
-      toast.success("Client onboarded", { description: `${s.clientName} added to your directory.` });
+      if (selectedExisting) {
+        // Adding a sub-venture to an existing TK customer
+        dhStore.addSubVenture(selectedExisting.id, s.companyName.trim());
+        toast.success("Sub-venture added", { description: `${s.companyName} added under ${selectedExisting.name}.` });
+      } else {
+        // Creating a brand new TK customer
+        dhStore.addClient({
+          name: s.clientName || s.companyName,
+          industry: s.industry || "Other",
+          contact: s.contacts[0]?.email ?? "",
+          engagementManager: s.engagementManager,
+          companyName: s.companyName,
+        });
+        toast.success("Client onboarded", { description: `${s.clientName} added to your directory.` });
+      }
       setSubmitting(false);
       onClose();
     }, 500);
@@ -288,53 +309,174 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
 
       {/* Step 1 — Company details */}
       {step === 1 && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="TK Customer / Partner Name" required>
-            <input className={inputCls} value={s.clientName} onChange={(e) => u("clientName", e.target.value)} />
-          </Field>
+        <div className="space-y-4">
+          {/* ── TK Customer search ── */}
+          <div>
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">
+              TK Customer / Partner Name <span className="text-destructive">*</span>
+            </span>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                className="h-9 w-full rounded-md border border-input bg-card pl-8 pr-8 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                placeholder="Search existing TK customers or type a new name…"
+                value={tkSearch}
+                onFocus={() => setTkDropOpen(true)}
+                onChange={(e) => {
+                  setTkSearch(e.target.value);
+                  setTkDropOpen(true);
+                  // If user edits after selecting, deselect
+                  if (selectedExisting && e.target.value !== selectedExisting.name) {
+                    setSelectedExisting(null);
+                    setS((p) => ({ ...p, clientName: e.target.value, companyOwner: "", engagementManager: "", phoneNumber: "", city: "", country: "", industry: "", businessType: "", customerId: "C" + String(allClients().length + 1).padStart(3, "0") }));
+                  } else {
+                    setS((p) => ({ ...p, clientName: e.target.value }));
+                  }
+                }}
+                onBlur={() => setTimeout(() => setTkDropOpen(false), 150)}
+              />
+              {selectedExisting && (
+                <button
+                  type="button"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => { setSelectedExisting(null); setTkSearch(""); setS((p) => ({ ...p, clientName: "", companyOwner: "", engagementManager: "", phoneNumber: "", city: "", country: "", industry: "", businessType: "", customerId: "C" + String(allClients().length + 1).padStart(3, "0") })); }}
+                  title="Clear selection"
+                ><X className="h-3.5 w-3.5" /></button>
+              )}
+              {tkDropOpen && (
+                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                  {filteredTk.length > 0 && (
+                    <>
+                      <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Existing Customers</div>
+                      {filteredTk.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
+                          onMouseDown={() => {
+                            setSelectedExisting(c);
+                            setTkSearch(c.name);
+                            setTkDropOpen(false);
+                            // Auto-fill from existing client
+                            setS((p) => ({
+                              ...p,
+                              clientName: c.name,
+                              customerId: c.id,
+                              companyOwner: (c as any).companyOwner ?? p.companyOwner,
+                              engagementManager: c.engagementManager ?? p.engagementManager,
+                              phoneNumber: (c as any).phoneNumber ?? p.phoneNumber,
+                              city: (c as any).city ?? p.city,
+                              country: (c as any).country ?? p.country,
+                              industry: c.industry ?? p.industry,
+                              businessType: (c as any).businessType ?? p.businessType,
+                            }));
+                          }}
+                        >
+                          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-primary to-info text-[11px] font-semibold text-primary-foreground shrink-0">{c.logo}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-medium">{c.name}</div>
+                            <div className="truncate text-[11px] text-muted-foreground">{c.industry} · {c.id}</div>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-medium text-success">Existing</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {tkSearch.trim() && (
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-primary hover:bg-accent"
+                      onMouseDown={() => {
+                        setSelectedExisting(null);
+                        setS((p) => ({ ...p, clientName: tkSearch.trim() }));
+                        setTkDropOpen(false);
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add <span className="font-semibold">"{tkSearch.trim()}"</span> as new TK Customer
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            {selectedExisting && (
+              <p className="mt-1 text-[11px] text-success">
+                ✓ Existing customer selected — details auto-filled. Add a new sub-venture below.
+              </p>
+            )}
+          </div>
+
+          {/* ── Existing client info banner ── */}
+          {selectedExisting && (
+            <div className="rounded-lg border border-info/30 bg-info/5 px-3 py-2.5 text-xs space-y-1">
+              <p className="font-semibold text-foreground">{selectedExisting.name}</p>
+              <p className="text-muted-foreground">{selectedExisting.industry} · ID: {selectedExisting.id}</p>
+              {selectedExisting.engagementManager && <p className="text-muted-foreground">EM: {selectedExisting.engagementManager}</p>}
+            </div>
+          )}
+
+          {/* ── Sub-venture name — always required ── */}
           <Field label="End Customer Name / Sub-venture Name" required>
-            <input className={inputCls} value={s.companyName} onChange={(e) => u("companyName", e.target.value)} />
+            <input className={inputCls} value={s.companyName} onChange={(e) => u("companyName", e.target.value)} placeholder="Enter sub-venture or end customer name…" />
           </Field>
-          <Field label="Customer ID">
-            <input className={readOnlyCls} value={s.customerId} readOnly />
-          </Field>
-          <Field label="Company Owner" required>
-            <input className={inputCls} value={s.companyOwner} onChange={(e) => u("companyOwner", e.target.value)} />
-          </Field>
-          <Field label="Engagement Manager" required>
-            <input className={inputCls} value={s.engagementManager} onChange={(e) => u("engagementManager", e.target.value)} />
-          </Field>
-          <Field label="Phone Number" required>
-            <input className={inputCls} value={s.phoneNumber} onChange={(e) => u("phoneNumber", e.target.value)} />
-          </Field>
-          <Field label="City" required>
-            <input className={inputCls} value={s.city} onChange={(e) => u("city", e.target.value)} />
-          </Field>
-          <Field label="Country / Region" required>
-            <input className={inputCls} value={s.country} onChange={(e) => u("country", e.target.value)} />
-          </Field>
-          <Field label="Industry" required>
-            <select className={inputCls} value={s.industry} onChange={(e) => u("industry", e.target.value)}>
-              <option value="">Select industry</option>
-              {["Banking", "Healthcare", "Retail", "Logistics", "Energy", "Manufacturing", "Telecom", "Media"].map((o) => (
-                <option key={o}>{o}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Business Type" required>
-            <select className={inputCls} value={s.businessType} onChange={(e) => u("businessType", e.target.value)}>
-              <option value="">Select business type</option>
-              {["Enterprise", "Mid-Market", "SMB", "Public Sector"].map((o) => (
-                <option key={o}>{o}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Created At">
-            <input className={readOnlyCls} value={format(new Date(s.createdAt), "dd MMM yyyy, HH:mm")} readOnly />
-          </Field>
-          <Field label="Created By">
-            <input className={readOnlyCls} value={s.createdBy} readOnly />
-          </Field>
+
+          {/* ── New TK customer fields — only shown when not selecting existing ── */}
+          {!selectedExisting && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Customer ID">
+                <input className={readOnlyCls} value={s.customerId} readOnly />
+              </Field>
+              <Field label="Company Owner" required>
+                <input className={inputCls} value={s.companyOwner} onChange={(e) => u("companyOwner", e.target.value)} />
+              </Field>
+              <Field label="Engagement Manager" required>
+                <input className={inputCls} value={s.engagementManager} onChange={(e) => u("engagementManager", e.target.value)} />
+              </Field>
+              <Field label="Phone Number" required>
+                <input className={inputCls} value={s.phoneNumber} onChange={(e) => u("phoneNumber", e.target.value)} />
+              </Field>
+              <Field label="City" required>
+                <input className={inputCls} value={s.city} onChange={(e) => u("city", e.target.value)} />
+              </Field>
+              <Field label="Country / Region" required>
+                <input className={inputCls} value={s.country} onChange={(e) => u("country", e.target.value)} />
+              </Field>
+              <Field label="Industry" required>
+                <select className={inputCls} value={s.industry} onChange={(e) => u("industry", e.target.value)}>
+                  <option value="">Select industry</option>
+                  {["Banking", "Healthcare", "Retail", "Logistics", "Energy", "Manufacturing", "Telecom", "Media"].map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Business Type" required>
+                <select className={inputCls} value={s.businessType} onChange={(e) => u("businessType", e.target.value)}>
+                  <option value="">Select business type</option>
+                  {["Enterprise", "Mid-Market", "SMB", "Public Sector"].map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Created At">
+                <input className={readOnlyCls} value={format(new Date(s.createdAt), "dd MMM yyyy, HH:mm")} readOnly />
+              </Field>
+              <Field label="Created By">
+                <input className={readOnlyCls} value={s.createdBy} readOnly />
+              </Field>
+            </div>
+          )}
+
+          {/* ── Existing client — show locked ID + created info ── */}
+          {selectedExisting && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Customer ID">
+                <input className={readOnlyCls} value={selectedExisting.id} readOnly />
+              </Field>
+              <Field label="Created By">
+                <input className={readOnlyCls} value={s.createdBy} readOnly />
+              </Field>
+            </div>
+          )}
         </div>
       )}
 
@@ -435,18 +577,24 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
       {/* Step 3 — Review */}
       {step === 3 && (
         <div className="rounded-lg border border-border bg-accent/20 p-4">
-          <h4 className="mb-3 text-sm font-semibold">Client Summary</h4>
+          <h4 className="mb-3 text-sm font-semibold">
+            {selectedExisting ? "Adding Sub-venture to Existing Customer" : "New Customer Summary"}
+          </h4>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-            <Row label="Client Name" v={s.clientName} />
-            <Row label="Company Name" v={s.companyName} />
-            <Row label="Customer ID" v={s.customerId} />
-            <Row label="Company Owner" v={s.companyOwner} />
-            <Row label="Engagement Manager" v={s.engagementManager} />
-            <Row label="Phone Number" v={s.phoneNumber} />
-            <Row label="City" v={s.city} />
-            <Row label="Country / Region" v={s.country} />
-            <Row label="Industry" v={s.industry} />
-            <Row label="Business Type" v={s.businessType} />
+            <Row label="TK Customer" v={s.clientName || selectedExisting?.name || "—"} />
+            <Row label="Sub-venture Name" v={s.companyName} />
+            <Row label="Customer ID" v={selectedExisting ? selectedExisting.id : s.customerId} />
+            {!selectedExisting && (
+              <>
+                <Row label="Company Owner" v={s.companyOwner} />
+                <Row label="Engagement Manager" v={s.engagementManager} />
+                <Row label="Phone Number" v={s.phoneNumber} />
+                <Row label="City" v={s.city} />
+                <Row label="Country / Region" v={s.country} />
+                <Row label="Industry" v={s.industry} />
+                <Row label="Business Type" v={s.businessType} />
+              </>
+            )}
             <Row label="Created At" v={format(new Date(s.createdAt), "dd MMM yyyy, HH:mm")} />
             <Row label="Created By" v={s.createdBy} />
             <Row label="KYC Document" v={s.kycFile ? s.kycFile.name : "—"} />
