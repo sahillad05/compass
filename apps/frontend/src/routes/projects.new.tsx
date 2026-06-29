@@ -240,6 +240,14 @@ function WbsNewProjectPage() {
   // ── PO File ──
   const [poFile, setPoFile] = useState<File | null>(null);
 
+  // ── Scroll-to-top ──
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 300);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   // ── Computed totals ──
   const subtotal = serviceRows.reduce((s, r) => s + r.total, 0);
   const tax = subtotal * (taxPercent / 100);
@@ -814,7 +822,7 @@ function WbsNewProjectPage() {
                       <select value={r.frequency} onChange={(e) => updateRow(r.rowId, "frequency", e.target.value)} style={{ ...reqSel(r.frequency), minWidth: 120 }}>
                         <option value="">— Select —</option>
                         <option value="Once">Once</option>
-                        <option value="Quarterly-1">Quarterly-1</option>
+                        <option value="Quarterly-1">Quarterly</option>
                         <option value="Half yearly">Half yearly</option>
                         <option value="Yearly">Yearly</option>
                       </select>
@@ -1021,6 +1029,39 @@ function WbsNewProjectPage() {
         </Card>
 
       </div>{/* /content-wrapper */}
+
+      {/* ── Scroll to top ── */}
+      <button
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        title="Scroll to top"
+        style={{
+          position: "fixed",
+          bottom: 32,
+          right: 24,
+          zIndex: 999,
+          width: 44,
+          height: 44,
+          borderRadius: "50%",
+          background: "#1a84d4",
+          color: "#fff",
+          border: "none",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 4px 14px rgba(26,132,212,0.45)",
+          opacity: showScrollTop ? 1 : 0,
+          pointerEvents: showScrollTop ? "auto" : "none",
+          transform: showScrollTop ? "translateY(0)" : "translateY(12px)",
+          transition: "opacity 0.3s ease, transform 0.3s ease",
+        }}
+        aria-label="Scroll to top"
+      >
+        {/* Upward chevron */}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="18 15 12 9 6 15" />
+        </svg>
+      </button>
 
       {/* ── Service Picker Modal ── */}
       {pickerOpen && (
