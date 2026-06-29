@@ -177,6 +177,11 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
   const [tkDropOpen, setTkDropOpen] = useState(false);
   const [selectedExisting, setSelectedExisting] = useState<typeof existingClients[0] | null>(null);
 
+  // ── Sub-venture search state (only when existing client selected) ──
+  const [svSearch, setSvSearch] = useState("");
+  const [svDropOpen, setSvDropOpen] = useState(false);
+  const [svAlreadyExists, setSvAlreadyExists] = useState(false);
+
   const filteredTk = existingClients.filter((c) =>
     tkSearch.trim() === "" ||
     c.name.toLowerCase().includes(tkSearch.toLowerCase())
@@ -215,7 +220,6 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
       contacts: p.contacts.map((c, i) => (i === idx ? { ...c, [field]: val } : c)),
     }));
 
-  // All 9 required fields on step 1 must be non-empty
   const isStep1Valid = (): boolean => {
     if (!s.companyName.trim()) return false; // Sub-venture always required
     if (selectedExisting) return true; // existing client — rest auto-filled
@@ -259,9 +263,14 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
     setSubmitting(true);
     setTimeout(() => {
       if (selectedExisting) {
-        // Adding a sub-venture to an existing TK customer
-        dhStore.addSubVenture(selectedExisting.id, s.companyName.trim());
-        toast.success("Sub-venture added", { description: `${s.companyName} added under ${selectedExisting.name}.` });
+        if (svAlreadyExists) {
+          // Sub-venture already exists — nothing to add, just acknowledge
+          toast.info("Sub-venture already exists", { description: `${s.companyName} is already under ${selectedExisting.name}.` });
+        } else {
+          // Adding a new sub-venture to an existing TK customer
+          dhStore.addSubVenture(selectedExisting.id, s.companyName.trim());
+          toast.success("Sub-venture added", { description: `${s.companyName} added under ${selectedExisting.name}.` });
+        }
       } else {
         // Creating a brand new TK customer
         dhStore.addClient({
@@ -328,7 +337,8 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
                   // If user edits after selecting, deselect
                   if (selectedExisting && e.target.value !== selectedExisting.name) {
                     setSelectedExisting(null);
-                    setS((p) => ({ ...p, clientName: e.target.value, companyOwner: "", engagementManager: "", phoneNumber: "", city: "", country: "", industry: "", businessType: "", customerId: "C" + String(allClients().length + 1).padStart(3, "0") }));
+                    setSvSearch(""); setSvDropOpen(false); setSvAlreadyExists(false);
+                    setS((p) => ({ ...p, clientName: e.target.value, companyName: "", companyOwner: "", engagementManager: "", phoneNumber: "", city: "", country: "", industry: "", businessType: "", customerId: "C" + String(allClients().length + 1).padStart(3, "0") }));
                   } else {
                     setS((p) => ({ ...p, clientName: e.target.value }));
                   }
@@ -339,7 +349,7 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
                 <button
                   type="button"
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={() => { setSelectedExisting(null); setTkSearch(""); setS((p) => ({ ...p, clientName: "", companyOwner: "", engagementManager: "", phoneNumber: "", city: "", country: "", industry: "", businessType: "", customerId: "C" + String(allClients().length + 1).padStart(3, "0") })); }}
+                  onClick={() => { setSelectedExisting(null); setTkSearch(""); setS((p) => ({ ...p, clientName: "", companyOwner: "", engagementManager: "", phoneNumber: "", city: "", country: "", industry: "", businessType: "", customerId: "C" + String(allClients().length + 1).padStart(3, "0") })); setSvSearch(""); setSvDropOpen(false); setSvAlreadyExists(false); }}
                   title="Clear selection"
                 ><X className="h-3.5 w-3.5" /></button>
               )}
@@ -415,10 +425,105 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {/* ── Sub-venture name — always required ── */}
-          <Field label="End Customer Name / Sub-venture Name" required>
-            <input className={inputCls} value={s.companyName} onChange={(e) => u("companyName", e.target.value)} placeholder="Enter sub-venture or end customer name…" />
-          </Field>
+          {/* ── Sub-venture name — searchable when existing client, plain input for new ── */}
+          {selectedExisting ? (
+            <div>
+              <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                End Customer Name / Sub-venture Name <span className="text-destructive">*</span>
+              </span>
+              {/* Existing sub-ventures of this client */}
+              {(selectedExisting.subVentures?.length ?? 0) > 0 && (
+                <p className="mb-1.5 text-[11px] text-muted-foreground">
+                  {selectedExisting.subVentures!.length} sub-venture(s) already under {selectedExisting.name}
+                </p>
+              )}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  className={cn("h-9 w-full rounded-md border border-input bg-card pl-8 pr-8 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    !s.companyName.trim() && "border-destructive/60")}
+                  placeholder="Search existing or type new sub-venture name…"
+                  value={svSearch}
+                  onFocus={() => setSvDropOpen(true)}
+                  onChange={(e) => {
+                    setSvSearch(e.target.value);
+                    setSvDropOpen(true);
+                    setSvAlreadyExists(false);
+                    setS((p) => ({ ...p, companyName: e.target.value }));
+                  }}
+                  onBlur={() => setTimeout(() => setSvDropOpen(false), 150)}
+                />
+                {s.companyName && (
+                  <button
+                    type="button"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => { setSvSearch(""); setSvAlreadyExists(false); setS((p) => ({ ...p, companyName: "" })); }}
+                  ><X className="h-3.5 w-3.5" /></button>
+                )}
+                {svDropOpen && (
+                  <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                    {/* Existing sub-ventures matching search */}
+                    {(selectedExisting.subVentures ?? [])
+                      .filter((sv) => !svSearch.trim() || sv.toLowerCase().includes(svSearch.toLowerCase()))
+                      .map((sv) => (
+                        <button
+                          key={sv}
+                          type="button"
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent"
+                          onMouseDown={() => {
+                            setSvSearch(sv);
+                            setSvAlreadyExists(true);
+                            setSvDropOpen(false);
+                            setS((p) => ({ ...p, companyName: sv }));
+                          }}
+                        >
+                          <span>{sv}</span>
+                          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning-foreground">Already exists</span>
+                        </button>
+                      ))}
+                    {/* Create new option when typed name not in list */}
+                    {svSearch.trim() &&
+                      !(selectedExisting.subVentures ?? []).some(
+                        (sv) => sv.toLowerCase() === svSearch.trim().toLowerCase()
+                      ) && (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-primary hover:bg-accent"
+                          onMouseDown={() => {
+                            setSvAlreadyExists(false);
+                            setSvDropOpen(false);
+                            setS((p) => ({ ...p, companyName: svSearch.trim() }));
+                          }}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Create <span className="font-semibold">"{svSearch.trim()}"</span> as new sub-venture
+                        </button>
+                      )}
+                    {/* Empty state */}
+                    {!svSearch.trim() && (selectedExisting.subVentures ?? []).length === 0 && (
+                      <div className="px-3 py-3 text-xs text-muted-foreground">
+                        No sub-ventures yet — type a name to create the first one
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              {svAlreadyExists && (
+                <p className="mt-1 text-[11px] text-warning-foreground">
+                  ⚠ This sub-venture already exists under {selectedExisting.name}. Proceeding will not create a duplicate.
+                </p>
+              )}
+              {!svAlreadyExists && s.companyName.trim() && (
+                <p className="mt-1 text-[11px] text-success">
+                  ✓ New sub-venture will be added under {selectedExisting.name}
+                </p>
+              )}
+            </div>
+          ) : (
+            <Field label="End Customer Name / Sub-venture Name" required>
+              <input className={inputCls} value={s.companyName} onChange={(e) => u("companyName", e.target.value)} placeholder="Enter sub-venture or end customer name…" />
+            </Field>
+          )}
 
           {/* ── New TK customer fields — only shown when not selecting existing ── */}
           {!selectedExisting && (
