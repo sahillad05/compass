@@ -278,7 +278,7 @@ function WbsNewProjectPage() {
             rowId: svcId, taskId: `WBS-${String(rowNum + 1).padStart(2, "0")}`,
             dept, name: svc.name, qty: 1, description: "", frequency: "",
             location: "", locationText: "", serviceModel: "",
-            deliveryFormat: "PDF Report", tools: svc.tool,
+            deliveryFormat: "", tools: svc.tool,
             startDate: todayIso, endDate: addWorkingDays(todayIso, svc.days),
             durationDays: svc.days, durationHrs: svc.days * 8,
             totalDays: svc.days, totalHrs: svc.days * 8, unitPrice: svc.unitPrice, total: svc.unitPrice,
@@ -342,12 +342,12 @@ function WbsNewProjectPage() {
     for (let i = 0; i < serviceRows.length; i++) {
       const r = serviceRows[i];
       const n = i + 1;
-      if (!r.taskId.trim())       return `Row ${n}: Activity ID is required`;
+      if (!r.taskId.trim())       return `Row ${n}: Service ID is required`;
       if (!r.name.trim())         return `Row ${n}: Service Name is required`;
       if (!r.frequency)           return `Row ${n}: Frequency is required`;
       if (!r.location)            return `Row ${n}: Project Onside is required`;
-      if (r.location === "Offsite" && !r.locationText.trim())
-                                  return `Row ${n}: Location (address) is required for Offsite`;
+      if (r.location === "Onsite" && !r.locationText.trim())
+                                  return `Row ${n}: Location is required for Onsite`;
       if (!r.serviceModel)        return `Row ${n}: Service Model is required`;
       if (!r.deliveryFormat.trim()) return `Row ${n}: Final Delivery Format is required`;
       if (!r.tools.trim())        return `Row ${n}: Tools is required`;
@@ -768,7 +768,7 @@ function WbsNewProjectPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead style={{ background: "#f3f4f6" }}>
                 <tr>
-                  <th style={{ ...thStyle, minWidth: 100 }}>Activity ID</th>
+                  <th style={{ ...thStyle, minWidth: 100 }}>Service ID</th>
                   <th style={{ ...thStyle, minWidth: 140 }}>Department</th>
                   <th style={{ ...thStyle, minWidth: 200 }}>Service Name</th>
                   <th style={{ ...thStyle, minWidth: 60 }}>Qty</th>
@@ -776,7 +776,7 @@ function WbsNewProjectPage() {
                   <th style={{ ...thStyle, minWidth: 120 }}>Frequency</th>
                   <th style={{ ...thStyle, minWidth: 110 }}>Project Onside</th>
                   <th style={{ ...thStyle, minWidth: 140 }}>Location</th>
-                  <th style={{ ...thStyle, minWidth: 140 }}>Service Model</th>
+                  <th style={{ ...thStyle, minWidth: 160 }}>Service Model</th>
                   <th style={{ ...thStyle, minWidth: 140 }}>Final Delivery Format</th>
                   <th style={{ ...thStyle, minWidth: 160 }}>Tools</th>
                   <th style={{ ...thStyle, minWidth: 140 }}>WBS Start Date</th>
@@ -822,8 +822,8 @@ function WbsNewProjectPage() {
                     <td style={tdStyle}>
                       <select value={r.location} onChange={(e) => {
                         updateRow(r.rowId, "location", e.target.value);
-                        // clear locationText if switching away from Offsite
-                        if (e.target.value !== "Offsite") updateRow(r.rowId, "locationText", "");
+                        // clear locationText when switching away from Onsite
+                        if (e.target.value !== "Onsite") updateRow(r.rowId, "locationText", "");
                       }} style={{ ...reqSel(r.location), minWidth: 110 }}>
                         <option value="">— Select —</option>
                         <option>Onsite</option><option>Offsite</option><option>Hybrid</option>
@@ -834,27 +834,27 @@ function WbsNewProjectPage() {
                         type="text"
                         value={r.locationText}
                         onChange={(e) => updateRow(r.rowId, "locationText", e.target.value)}
-                        placeholder={isOffsite ? "Enter location…" : "—"}
-                        readOnly={!isOffsite}
+                        placeholder={r.location === "Onsite" ? "Enter location…" : "—"}
+                        readOnly={r.location !== "Onsite"}
                         style={{
                           ...tblInputStyle,
                           minWidth: 140,
-                          ...(isOffsite
+                          ...(r.location === "Onsite"
                             ? (!r.locationText.trim() ? { border: "1.5px solid #ef4444" } : {})
                             : { background: "#f3f4f6", color: "#9ca3af", cursor: "not-allowed" }),
                         }}
                       />
                     </td>
                     <td style={tdStyle}>
-                      <select value={r.serviceModel} onChange={(e) => updateRow(r.rowId, "serviceModel", e.target.value)} style={{ ...reqSel(r.serviceModel), minWidth: 140 }}>
+                      <select value={r.serviceModel} onChange={(e) => updateRow(r.rowId, "serviceModel", e.target.value)} style={{ ...reqSel(r.serviceModel), minWidth: 160 }}>
                         <option value="">— Select —</option>
                         <option value="Initial Test">Initial Test</option>
-                        <option value="1 Re-test">1 Re-test</option>
-                        <option value="2 Re-test">2 Re-test</option>
-                        <option value="3 Re-test">3 Re-test</option>
+                        <option value="Initial + 1 Re-test">Initial + 1 Re-test</option>
+                        <option value="Initial + 2 Re-test">Initial + 2 Re-test</option>
+                        <option value="Initial + 3 Re-test">Initial + 3 Re-test</option>
                       </select>
                     </td>
-                    <td style={tdStyle}><input type="text" value={r.deliveryFormat} onChange={(e) => updateRow(r.rowId, "deliveryFormat", e.target.value)} style={{ ...req(r.deliveryFormat), minWidth: 140 }} /></td>
+                    <td style={tdStyle}><input type="text" value={r.deliveryFormat} onChange={(e) => updateRow(r.rowId, "deliveryFormat", e.target.value)} placeholder="e.g. PDF, EXCEL, etc." style={{ ...req(r.deliveryFormat), minWidth: 140 }} /></td>
                     <td style={tdStyle}><input type="text" value={r.tools} onChange={(e) => updateRow(r.rowId, "tools", e.target.value)} style={{ ...req(r.tools), minWidth: 160 }} /></td>
                     <td style={tdStyle}><input type="date" value={r.startDate} onChange={(e) => updateRow(r.rowId, "startDate", e.target.value)} style={{ ...req(r.startDate), minWidth: 140 }} /></td>
                     <td style={tdStyle}><input type="date" value={r.endDate} readOnly style={{ ...tblInputStyle, background: "#f3f4f6", minWidth: 140 }} title="Auto-calculated from Start Date + Total Days (working days only)" /></td>
