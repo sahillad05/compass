@@ -2,13 +2,16 @@
  * /projects/new — Full WBS Form Page (Dhanshree Role Only)
  * Exact layout from wbs-form 2.html, wired to dh-store.
  */
-import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useRoleContext } from "@/lib/role-context";
 import { allClients, dhStore, useDhStore, buildProjectDisplayId, buildWbsId } from "@/lib/dh-store";
 
 export const Route = createFileRoute("/projects/new")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    draftId: typeof search.draftId === "string" ? search.draftId : undefined,
+  }),
   head: () => ({
     meta: [{ title: "New Project — WBS Form" }],
   }),
@@ -248,6 +251,44 @@ function WbsNewProjectPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // ── Draft restoration ──
+  const { draftId } = useSearch({ from: "/projects/new" });
+  const drafts = useDhStore((s) => s.wbsDrafts);
+  useEffect(() => {
+    if (!draftId) return;
+    const draft = drafts.find((d) => d.id === draftId);
+    if (!draft) return;
+    const snap = draft.formSnapshot as any;
+    if (snap.projectName)       setProjectName(snap.projectName);
+    if (snap.selectedClientId)  setSelectedClientId(snap.selectedClientId);
+    if (snap.selectedSubVenture) setSelectedSubVenture(snap.selectedSubVenture);
+    if (snap.contractType)      setContractType(snap.contractType);
+    if (snap.engagementManager) setEngagementManager(snap.engagementManager);
+    if (snap.salesPerson)       setSalesPerson(snap.salesPerson);
+    if (snap.projectType)       setProjectType(snap.projectType);
+    if (snap.billingModel)      setBillingModel(snap.billingModel);
+    if (snap.paymentTerms)      setPaymentTerms(snap.paymentTerms);
+    if (snap.currency)          setCurrency(snap.currency);
+    if (snap.taxPercent != null) setTaxPercent(snap.taxPercent);
+    if (snap.poStatus)          setPoStatus(snap.poStatus);
+    if (snap.poNumber)          setPoNumber(snap.poNumber);
+    if (snap.poDate)            setPoDate(snap.poDate);
+    if (snap.targetDate)        setTargetDate(snap.targetDate);
+    if (snap.contactName)       setContactName(snap.contactName);
+    if (snap.contactNumber)     setContactNumber(snap.contactNumber);
+    if (snap.contactEmail)      setContactEmail(snap.contactEmail);
+    if (snap.sectionAComments)  setSectionAComments(snap.sectionAComments);
+    if (snap.sectionBComments)  setSectionBComments(snap.sectionBComments);
+    if (snap.serviceRows?.length)  setServiceRows(snap.serviceRows);
+    if (snap.invoiceRows?.length)  setInvoiceRows(snap.invoiceRows);
+    // also restore client search display
+    const restoredClient = clients.find((c) => c.id === snap.selectedClientId);
+    if (restoredClient) setClientSearch(restoredClient.name);
+    if (snap.selectedSubVenture) setSvSearch(snap.selectedSubVenture);
+    toast.success("Draft loaded", { description: `"${draft.projectName}" restored.` });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId]);
+
   // ── Computed totals ──
   const subtotal = serviceRows.reduce((s, r) => s + r.total, 0);
   const tax = subtotal * (taxPercent / 100);
@@ -438,25 +479,25 @@ function WbsNewProjectPage() {
   function handleSaveDraft() {
     if (!projectName.trim()) { toast.error("Project Name is required"); return; }
     if (!selectedClientId) { toast.error("Please select a client"); return; }
-    if (billingModel === "Custom" && !paymentTerms.trim()) { toast.error("Payment Terms is required when Billing Model is Custom"); return; }
-    if (serviceRows.length > 0) {
-      const err = validateServiceRows();
-      if (err) { toast.error(err); return; }
-    }
-    const proj = dhStore.addProject({
-      name: projectName, clientId: selectedClientId,
-      description: sectionAComments,
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: projectIssuedDate || new Date(Date.now() + 86400000 * 90).toISOString().slice(0, 10),
-      budget: subtotal,
-      wbsStatus: "draft", wbsSubStatus: "Draft",
-      engagementManager, salesPerson, contractType, projectType,
-      projectIssuedDate, currency, taxPercent, totalHours, totalDays,
-      invoiceValue: invoiceTarget, sectionAComments, sectionBComments,
-      wbsDetails: buildWbsDetails(),
+    const clientName = clients.find((c) => c.id === selectedClientId)?.name ?? selectedClientId;
+    dhStore.saveDraft({
+      projectName,
+      clientId: selectedClientId,
+      clientName,
+      salesPerson,
+      savedBy: "Dhanshree",
+      savedAt: new Date().toISOString(),
+      formSnapshot: {
+        projectName, selectedClientId, selectedSubVenture,
+        contractType, engagementManager, salesPerson, projectType, projectIssuedDate,
+        billingModel, paymentTerms, currency, taxPercent,
+        poStatus, poNumber, poDate, targetDate,
+        contactName, contactNumber, contactEmail,
+        sectionAComments, sectionBComments,
+        serviceRows, invoiceRows,
+      },
     });
-    toast.success("Draft Saved", { description: `Project "${projectName}" saved as Draft in Stage: Sales.` });
-    navigate({ to: "/projects/$projectId", params: { projectId: proj.id } });
+    toast.success("Draft saved", { description: `"${projectName}" saved to your drafts.` });
   }
 
   function handleAssignWbs() {

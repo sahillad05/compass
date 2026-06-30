@@ -372,10 +372,24 @@ export interface TaskAssignmentState {
   history: TaskAssignmentHistoryEntry[];
 }
 
+// ---------- WBS Draft ----------
+export interface WbsDraft {
+  id: string;
+  projectName: string;
+  clientId: string;
+  clientName: string;
+  salesPerson: string;
+  savedBy: string;       // user name who saved the draft
+  savedAt: string;       // ISO timestamp
+  // Full form state for restoration
+  formSnapshot: Record<string, unknown>;
+}
+
 interface DhState {
   extraClients: Client[];
   extraProjects: Project[];
-  subVentureOverrides: Record<string, string[]>; // clientId → additional sub-ventures added at runtime
+  subVentureOverrides: Record<string, string[]>;
+  wbsDrafts: WbsDraft[];
   issues: DhIssue[];
   alerts: DhAlert[];
   escalations: DhEscalation[];
@@ -404,6 +418,7 @@ const state: DhState = {
   extraClients: [],
   extraProjects: [],
   subVentureOverrides: {},
+  wbsDrafts: [],
   onboardedResources: [
     { employeeId: "EMP-0021", name: "Priya Sharma", department: "Engineering", subDepartment: "Frontend", joiningDate: "2026-05-12", designation: "Software Engineer", currentProject: "Core Banking Modernization", status: "Probation" },
     { employeeId: "EMP-0022", name: "Rohan Mehta", department: "QA", subDepartment: "Automation", joiningDate: "2026-05-20", designation: "QA Engineer", currentProject: "Mobile Banking App v3", status: "Probation" },
@@ -959,6 +974,24 @@ export const dhStore = {
     ];
     emit();
   },
+  // ── WBS Drafts ──
+  saveDraft(draft: Omit<WbsDraft, "id">) {
+    const id = uid("draft");
+    // If a draft for the same projectName + clientId exists, overwrite it
+    const idx = state.wbsDrafts.findIndex(
+      (d) => d.projectName === draft.projectName && d.clientId === draft.clientId
+    );
+    const entry: WbsDraft = { ...draft, id };
+    if (idx >= 0) state.wbsDrafts[idx] = entry;
+    else state.wbsDrafts.unshift(entry);
+    emit();
+    return entry;
+  },
+  deleteDraft(draftId: string) {
+    state.wbsDrafts = state.wbsDrafts.filter((d) => d.id !== draftId);
+    emit();
+  },
+
   addProject(input: {
     name: string;
     clientId: string;

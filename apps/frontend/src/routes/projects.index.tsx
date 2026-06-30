@@ -1,10 +1,10 @@
 import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { LayoutGrid, List, Search, ArrowRight, Calendar, Plus, X, ChevronRight, Check, Trash2, Calculator } from "lucide-react";
+import { LayoutGrid, List, Search, ArrowRight, Calendar, Plus, X, ChevronRight, Check, Trash2, Calculator, FileText, Clock, User } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { useRoleContext } from "@/lib/role-context";
-import { allClients, allProjects, dhStore, useDhStore } from "@/lib/dh-store";
+import { allClients, allProjects, dhStore, useDhStore, type WbsDraft } from "@/lib/dh-store";
 import { HealthPill, StatusPill, ProgressBar, PriorityPill, Avatar } from "@/components/pills";
 import { getProjectEMs, getProjectPMs, getProjectTLs, formatPeopleSummary } from "@/lib/dh-helpers";
 import { cn } from "@/lib/utils";
@@ -28,10 +28,12 @@ function ProjectsPage() {
   const [tab, setTab] = useState<Tab>("Active Projects");
   const [view, setView] = useState<"card" | "list">("card");
   const [q, setQ] = useState("");
+  const [draftsOpen, setDraftsOpen] = useState(false);
 
   if (!isDhanshree) return <Navigate to="/" />;
 
   const extraCount = useDhStore((s) => s.extraClients.length + s.extraProjects.length);
+  const drafts = useDhStore((s) => s.wbsDrafts);
   const projects = useMemo(() => allProjects(), [extraCount]);
   const clients = useMemo(() => allClients(), [extraCount]);
 
@@ -66,6 +68,22 @@ function ProjectsPage() {
             className="h-9 w-full rounded-md border border-input bg-card pl-8 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {/* Drafts button */}
+          <button
+            onClick={() => setDraftsOpen(true)}
+            className={cn(
+              "relative inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-accent",
+              draftsOpen && "bg-accent"
+            )}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Drafts
+            {drafts.length > 0 && (
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-warning/80 px-1 text-[10px] font-bold text-white">
+                {drafts.length}
+              </span>
+            )}
+          </button>
           <div className="flex gap-1 rounded-lg border border-border bg-card p-1 text-xs shadow-sm">
             <button onClick={() => setView("card")} aria-label="Card view"
               className={cn("inline-flex items-center gap-1 rounded-md px-2.5 py-1",
@@ -192,6 +210,87 @@ function ProjectsPage() {
       )}
 
       {/* New Project navigates to /projects/new (full WBS form) */}
+
+      {/* ── Drafts panel ── */}
+      {draftsOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setDraftsOpen(false)}>
+          <aside
+            className="flex h-full w-full max-w-md flex-col border-l border-border bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <div>
+                <h2 className="text-sm font-semibold">Saved Drafts</h2>
+                <p className="text-[11px] text-muted-foreground">{drafts.length} draft{drafts.length !== 1 ? "s" : ""} saved</p>
+              </div>
+              <button onClick={() => setDraftsOpen(false)} className="rounded-md p-1.5 hover:bg-accent" aria-label="Close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto">
+              {drafts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+                  <FileText className="h-10 w-10 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">No drafts saved yet</p>
+                  <p className="text-xs text-muted-foreground">Use "Save Draft" on the New Project page to save your work</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {drafts.map((d: WbsDraft) => (
+                    <li key={d.id} className="group px-4 py-3 hover:bg-accent/40">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <FileText className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold">{d.projectName}</p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <User className="h-3 w-3" />{d.clientName}
+                            </span>
+                            {d.salesPerson && (
+                              <span className="flex items-center gap-1">
+                                · Sales: {d.salesPerson}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            Saved by {d.savedBy} · {new Date(d.savedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-col gap-1.5">
+                          <button
+                            onClick={() => {
+                              setDraftsOpen(false);
+                              navigate({ to: "/projects/new", search: { draftId: d.id } as any });
+                            }}
+                            className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90"
+                          >
+                            <ArrowRight className="h-3 w-3" /> Open
+                          </button>
+                          <button
+                            onClick={() => {
+                              dhStore.deleteDraft(d.id);
+                              toast.success("Draft deleted");
+                            }}
+                            className="inline-flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-3 w-3" /> Delete
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
     </AppShell>
   );
 }
