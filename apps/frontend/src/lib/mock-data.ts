@@ -30,6 +30,16 @@ export interface Task {
   assigneeId: string;
   dueDate: string;
   progress: number;
+  // WBS-linked fields (populated when project is created via Assign WBS)
+  serviceId?: string;
+  wbsStartDate?: string;
+  wbsEndDate?: string;
+  estimatedHours?: number;
+  // PM-editable actuals
+  actualStartDate?: string;
+  actualEndDate?: string;   // auto-calculated from actualStartDate + estimatedHours (skip weekends)
+  utilizedHours?: number;
+  stage?: "Not Started" | "Completed" | "On Hold (Internal)" | "On Hold (Client End)" | "After Release";
 }
 
 export interface WBSNode {
@@ -47,6 +57,7 @@ export interface WbsService {
   description: string;
   frequency: string;
   location: string;
+  locationText?: string;
   serviceModel: string;
   deliveryModel: string;
   finalDeliveryFormat: string;
@@ -54,7 +65,9 @@ export interface WbsService {
   tools: string;
   startDate: string;
   endDate: string;
-  duration: number; // e.g. months
+  duration: number;
+  totalDays: number;
+  totalHrs: number;
   unitPrice: number;
   total: number;
 }
@@ -353,14 +366,28 @@ export const allocationHistory: AllocationEvent[] = [
 ];
 
 // ---------- Projects ----------
-const mkTasks = (prefix: string, assignees: string[]): Task[] => [
-  { id: `${prefix}-t1`, title: "Requirements gathering", status: "done", assigneeId: assignees[0], dueDate: "2026-04-12", progress: 100 },
-  { id: `${prefix}-t2`, title: "Architecture design", status: "done", assigneeId: assignees[1] ?? assignees[0], dueDate: "2026-04-22", progress: 100 },
-  { id: `${prefix}-t3`, title: "API implementation", status: "in_progress", assigneeId: assignees[2] ?? assignees[0], dueDate: "2026-05-18", progress: 65 },
-  { id: `${prefix}-t4`, title: "Frontend integration", status: "in_progress", assigneeId: assignees[1] ?? assignees[0], dueDate: "2026-05-22", progress: 40 },
-  { id: `${prefix}-t5`, title: "QA & UAT", status: "review", assigneeId: assignees[0], dueDate: "2026-06-04", progress: 20 },
-  { id: `${prefix}-t6`, title: "Deployment", status: "todo", assigneeId: assignees[2] ?? assignees[0], dueDate: "2026-06-12", progress: 0 },
-];
+// Helper to add N working days to a YYYY-MM-DD string
+function addWd(iso: string, days: number): string {
+  const d = new Date(iso);
+  let r = days;
+  while (r > 0) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) r--; }
+  return d.toISOString().slice(0, 10);
+}
+
+const SERVICE_IDS = ["PT001", "PT002", "VA001", "CS001", "CODE001", "COMP001", "SE001", "FOR001", "NET001", "THREAT001", "RT001", "PT003"];
+const STAGES: Array<Task["stage"]> = ["Not Started", "Completed", "On Hold (Internal)", "Not Started", "Completed", "After Release"];
+
+const mkTasks = (prefix: string, assignees: string[]): Task[] => {
+  const base = "2026-04-01";
+  return [
+    { id: `${prefix}-t1`, title: "External Network Penetration Testing", status: "done",   assigneeId: assignees[0], dueDate: "2026-04-12", progress: 100, serviceId: SERVICE_IDS[0], wbsStartDate: base,            wbsEndDate: addWd(base, 5),  estimatedHours: 40,  stage: "Completed" },
+    { id: `${prefix}-t2`, title: "Web Application Penetration Testing",   status: "done",   assigneeId: assignees[1] ?? assignees[0], dueDate: "2026-04-22", progress: 100, serviceId: SERVICE_IDS[2], wbsStartDate: addWd(base, 6),  wbsEndDate: addWd(base, 10), estimatedHours: 32,  stage: "Completed" },
+    { id: `${prefix}-t3`, title: "Cloud Infrastructure Assessment",       status: "in_progress", assigneeId: assignees[2] ?? assignees[0], dueDate: "2026-05-18", progress: 65, serviceId: SERVICE_IDS[3], wbsStartDate: addWd(base, 11), wbsEndDate: addWd(base, 16), estimatedHours: 40,  stage: "Not Started" },
+    { id: `${prefix}-t4`, title: "Source Code Security Review",           status: "in_progress", assigneeId: assignees[1] ?? assignees[0], dueDate: "2026-05-22", progress: 40, serviceId: SERVICE_IDS[4], wbsStartDate: addWd(base, 17), wbsEndDate: addWd(base, 24), estimatedHours: 48,  stage: "Not Started" },
+    { id: `${prefix}-t5`, title: "ISO 27001 Security Audit",              status: "review", assigneeId: assignees[0], dueDate: "2026-06-04", progress: 20, serviceId: SERVICE_IDS[5], wbsStartDate: addWd(base, 25), wbsEndDate: addWd(base, 35), estimatedHours: 64,  stage: "On Hold (Internal)" },
+    { id: `${prefix}-t6`, title: "Phishing Campaign & Assessment",        status: "todo",   assigneeId: assignees[2] ?? assignees[0], dueDate: "2026-06-12", progress: 0,  serviceId: SERVICE_IDS[6], wbsStartDate: addWd(base, 36), wbsEndDate: addWd(base, 38), estimatedHours: 16,  stage: "Not Started" },
+  ];
+};
 
 const mkWbs = (): WBSNode[] => [
   {

@@ -1020,20 +1020,22 @@ export const dhStore = {
     const wbsAutoId = buildWbsId(input.clientId);
     const now = new Date().toISOString();
 
-    // Auto-generate tasks from WBS services
+    // Auto-generate one task per WBS service row with real data
     const autoTasks: any[] = [];
-    const DEFAULT_SUBTASKS = ["Requirement Collection", "Testing", "Validation", "Report Preparation", "Delivery"];
     if (input.wbsDetails?.services) {
-      input.wbsDetails.services.forEach((svc: any, si: number) => {
-        DEFAULT_SUBTASKS.forEach((sub, ti) => {
-          autoTasks.push({
-            id: `${id}-svc${si}-t${ti}`,
-            title: `[${svc.serviceName || svc.department}] ${sub}`,
-            status: "todo" as const,
-            assigneeId: "u3",
-            dueDate: svc.endDate || input.endDate,
-            progress: 0,
-          });
+      input.wbsDetails.services.forEach((svc: any) => {
+        autoTasks.push({
+          id: `${id}-svc-${svc.id}`,
+          title: svc.serviceName || svc.department,
+          status: "todo" as const,
+          assigneeId: "u3",
+          dueDate: svc.endDate || input.endDate,
+          progress: 0,
+          serviceId: svc.id,
+          wbsStartDate: svc.startDate,
+          wbsEndDate: svc.endDate,
+          estimatedHours: svc.totalHrs ?? (svc.totalDays ? svc.totalDays * 8 : svc.duration * 8),
+          stage: "Not Started" as const,
         });
       });
     }
@@ -1502,6 +1504,8 @@ export const dhStore = {
       })
     };
     state.taskAssignments[taskId] = newState;
+    // emit so useDhStore subscribers (liveAssignments) see the seeded data immediately
+    emit();
     return newState;
   },
 
@@ -1547,6 +1551,37 @@ export const dhStore = {
     });
     
     current.assigneeIds = selectedIds;
+    emit();
+  },
+
+  // Update PM-editable actuals on a task; auto-calculates actualEndDate skipping weekends
+  updateTaskActuals(projectId: string, taskId: string, patch: {
+    actualStartDate?: string;
+    utilizedHours?: number;
+    stage?: "Not Started" | "Completed" | "On Hold (Internal)" | "On Hold (Client End)" | "After Release";
+  }) {
+    const proj = state.extraProjects.find((p) => p.id === projectId);
+    if (!proj) return;
+    const task = proj.tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    if (patch.actualStartDate !== undefined) task.actualStartDate = patch.actualStartDate;
+    if (patch.utilizedHours !== undefined) task.utilizedHours = patch.utilizedHours;
+    if (patch.stage !== undefined) task.stage = patch.stage;
+    // Auto-calc actualEndDate whenever actualStartDate changes and estimatedHours is known
+    if (task.actualStartDate && task.estimatedHours) {
+      const days = Math.ceil(task.estimatedHours / 8);
+      let d = new Date(task.actualStartDate);
+      let remaining = days;
+      while (remaining > 0) {
+        d.setDate(d.getDate() + 1);
+        const dow = d.getDay();
+        if (dow !== 0 && dow !== 6) remaining--;
+      }
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      task.actualEndDate = `${y}-${m}-${dd}`;
+    }
     emit();
   },
 

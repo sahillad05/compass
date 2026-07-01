@@ -123,6 +123,8 @@ interface ServiceRow {
   location: string;       // Project Onside — dropdown (Onsite/Offsite/Hybrid)
   locationText: string;   // Location — free text
   serviceModel: string;
+  deliveryModel: string;  // preserved for WBS record
+  billingModel: string;   // preserved for WBS record
   deliveryFormat: string;
   tools: string;
   startDate: string;
@@ -208,9 +210,6 @@ function WbsNewProjectPage() {
 
   // WBS ID — recomputed from selected client + current FY + next project seq
   const wbsId = selectedClientId ? buildWbsId(selectedClientId) : "—";
-
-  // ── Stepper ──
-  const [stepperStep, setStepperStep] = useState(0); // 0=Draft, 1=Sent, 2=PH, 3=Accounts, 4=Approved, 5=Started
 
   // ── Service picker ──
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -327,6 +326,7 @@ function WbsNewProjectPage() {
             rowId: svcId, taskId: `WBS-${String(rowNum + 1).padStart(2, "0")}`,
             dept, name: svc.name, qty: 1, description: "", frequency: "",
             location: "", locationText: "", serviceModel: "",
+            deliveryModel: "Remote", billingModel: "",
             deliveryFormat: "", tools: svc.tool,
             startDate: todayIso, endDate: addWorkingDays(todayIso, svc.days),
             durationDays: svc.days, durationHrs: svc.days * 8,
@@ -460,6 +460,7 @@ function WbsNewProjectPage() {
         id: r.rowId, department: r.dept, serviceName: r.name,
         qty: r.qty, description: r.description, frequency: r.frequency,
         location: r.location, locationText: r.locationText, serviceModel: r.serviceModel,
+        deliveryModel: r.deliveryModel, billingModel: r.billingModel,
         finalDeliveryFormat: r.deliveryFormat,
         tools: r.tools, startDate: r.startDate, endDate: r.endDate,
         duration: r.durationDays, unitPrice: r.unitPrice, total: r.total,
@@ -529,8 +530,6 @@ function WbsNewProjectPage() {
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────
-
-  const stepperSteps = ["Draft", "WBS alloacation Status", "Project Started"];
 
   return (
     <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif", background: "#f9fafb", color: "#1f2937", minHeight: "100vh" }}>
@@ -734,21 +733,6 @@ function WbsNewProjectPage() {
               </div>
             </div>
 
-          </div>
-        </div>
-
-        {/* ── Status Stepper ── */}
-        <div style={{ marginBottom: 30, position: "relative" }}>
-          <div style={{ position: "absolute", top: 20, left: "5%", right: "5%", height: 2, background: "#d1d5db", zIndex: 0 }} />
-          <div style={{ display: "flex", justifyContent: "space-between", position: "relative", zIndex: 1 }}>
-            {stepperSteps.map((label, i) => (
-              <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, flex: 1 }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: i < stepperStep ? "#22c55e" : i === stepperStep ? "#1a84d4" : "#d1d5db", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: i <= stepperStep ? "#fff" : "#6b7280" }}>
-                  {i < stepperStep ? "✓" : i + 1}
-                </div>
-                <div style={{ fontSize: 11, color: "#6b7280", textAlign: "center" }}>{label}</div>
-              </div>
-            ))}
           </div>
         </div>
 

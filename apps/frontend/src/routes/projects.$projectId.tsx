@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { ChevronRight, Calendar, Wallet, Lock, UserPlus, Eye, Pencil, Trash2, MoreHorizontal, X, Star, MessageSquare, Send, Check, Search, AlertTriangle, Award, Plus, ShieldCheck, Paperclip, Briefcase, Users, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
@@ -411,10 +411,12 @@ function WbsTab({ project }: { project: Project }) {
                   <th className="px-3 py-2 font-medium">Qty</th>
                   <th className="px-3 py-2 font-medium">Description</th>
                   <th className="px-3 py-2 font-medium">Location</th>
+                  <th className="px-3 py-2 font-medium">Service Model</th>
+                  <th className="px-3 py-2 font-medium">Delivery Model</th>
                   <th className="px-3 py-2 font-medium">Billing Model</th>
                   <th className="px-3 py-2 font-medium">Start Date</th>
                   <th className="px-3 py-2 font-medium">End Date</th>
-                  <th className="px-3 py-2 font-medium">Duration</th>
+                  <th className="px-3 py-2 font-medium">Est. Hours</th>
                   <th className="px-3 py-2 font-medium text-right">Total</th>
                 </tr>
               </thead>
@@ -425,16 +427,18 @@ function WbsTab({ project }: { project: Project }) {
                     <td className="px-3 py-2 font-medium">{svc.serviceName}</td>
                     <td className="px-3 py-2 text-center">{svc.qty}</td>
                     <td className="px-3 py-2 max-w-xs truncate" title={svc.description}>{svc.description}</td>
-                    <td className="px-3 py-2">{svc.location}</td>
-                    <td className="px-3 py-2">{svc.billingModel}</td>
+                    <td className="px-3 py-2">{svc.location}{svc.locationText ? ` — ${svc.locationText}` : ""}</td>
+                    <td className="px-3 py-2">{svc.serviceModel ?? "—"}</td>
+                    <td className="px-3 py-2">{svc.deliveryModel ?? "—"}</td>
+                    <td className="px-3 py-2">{svc.billingModel ?? "—"}</td>
                     <td className="px-3 py-2">{svc.startDate}</td>
                     <td className="px-3 py-2">{svc.endDate}</td>
-                    <td className="px-3 py-2 text-center">{svc.duration} (m)</td>
+                    <td className="px-3 py-2 text-center">{svc.totalHrs ?? (svc.totalDays ? svc.totalDays * 8 : svc.duration * 8)} hrs</td>
                     <td className="px-3 py-2 text-right font-medium">{wbsDetails.currency} {svc.total.toLocaleString()}</td>
                   </tr>
                 ))}
                 {wbsDetails.services.length === 0 && (
-                  <tr><td colSpan={10} className="px-3 py-6 text-center text-sm text-muted-foreground">No services defined.</td></tr>
+                  <tr><td colSpan={12} className="px-3 py-6 text-center text-sm text-muted-foreground">No services defined.</td></tr>
                 )}
               </tbody>
             </table>
@@ -944,6 +948,105 @@ function getActivityName(t: Task): string {
   return "Execution";
 }
 
+// ── Working-day helper (skip Sat/Sun) ──────────────────────────────────────
+function addWorkingDaysFromDate(startIso: string, days: number): string {
+  const d = new Date(startIso);
+  let rem = days;
+  while (rem > 0) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) rem--;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+// ── AvatarStack with hover tooltip ────────────────────────────────────────
+function AvatarStack({ names }: { names: string[] }) {
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const validNames = names.filter(Boolean);
+  const initials = (n: string) => n.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+  const colors = ["bg-primary", "bg-info", "bg-success", "bg-warning"];
+  const first = validNames[0];
+  const extra = validNames.length - 1;
+
+  const showTooltip = () => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    setTooltipPos({ x: rect.left, y: rect.bottom + 6 });
+  };
+  const hideTooltip = () => setTooltipPos(null);
+
+  if (validNames.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  return (
+    <>
+      <div
+        ref={ref}
+        className="inline-flex items-center cursor-default"
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+      >
+        {/* First circle */}
+        <span className={cn(
+          "inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-card text-[10px] font-bold text-white z-10 select-none",
+          colors[0]
+        )}>
+          {initials(first)}
+        </span>
+        {/* +N badge — only when more than 1 person */}
+        {extra >= 1 && (
+          <span className="-ml-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-card bg-white px-1 text-[10px] font-bold text-foreground shadow-sm z-20 select-none">
+            +{extra}
+          </span>
+        )}
+      </div>
+
+      {/* Tooltip rendered via portal-like fixed positioning — never clipped by overflow */}
+      {tooltipPos && (
+        <div
+          className="fixed z-[9999] min-w-[170px] rounded-lg border border-border bg-popover p-2.5 shadow-xl"
+          style={{ top: tooltipPos.y, left: tooltipPos.x }}
+          onMouseEnter={showTooltip}
+          onMouseLeave={hideTooltip}
+        >
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {validNames.length} Assigned
+          </p>
+          <div className="space-y-1">
+            {validNames.map((n, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs font-medium text-foreground">
+                <span className={cn(
+                  "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white",
+                  colors[i % colors.length]
+                )}>
+                  {initials(n)}
+                </span>
+                {n}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+const TASK_STAGES = ["Not Started", "Completed", "On Hold (Internal)", "On Hold (Client End)", "After Release"] as const;
+type TaskStage = typeof TASK_STAGES[number];
+
+function stageCls(s: TaskStage) {
+  return ({
+    "Not Started": "border-border bg-muted text-muted-foreground",
+    "Completed": "border-success/30 bg-success/10 text-success",
+    "On Hold (Internal)": "border-warning/40 bg-warning/15 text-warning-foreground",
+    "On Hold (Client End)": "border-orange-300 bg-orange-50 text-orange-700",
+    "After Release": "border-purple-200 bg-purple-50 text-purple-700",
+  } as Record<TaskStage, string>)[s] ?? "border-border bg-muted text-muted-foreground";
+}
+
 function DhTasksTab({ project }: { project: Project }) {
   const snapshot = useDhStore((s) => s);
   const prereq = snapshot.prereqs[project.id];
@@ -955,41 +1058,53 @@ function DhTasksTab({ project }: { project: Project }) {
         <AlertTriangle className="mx-auto h-8 w-8 text-amber-500 mb-2" />
         <h4 className="font-semibold text-sm mb-1 text-warning-foreground">Access Blocked — Project Not Started</h4>
         <p className="max-w-md mx-auto text-xs text-muted-foreground leading-relaxed">
-          Team building, resource assignment, shadow team allocation, task assignment, and activity assignment are disabled until the prerequisite collections and validations are completed, PM/SPM are assigned, and the project is marked as "Ready To Start".
+          Resource assignment and task tracking are disabled until prerequisites are completed, PM/SPM are assigned, and the project is marked as "Ready To Start".
         </p>
       </div>
     );
   }
 
-  // Local state for task status
-  const initialState = useMemo(() => {
-    const map: Record<string, { status: DhTaskStatus }> = {};
-    project.tasks.forEach((t) => {
-      map[t.id] = { status: mapTaskStatus(t.status) };
-    });
-    return map;
-  }, [project]);
-  
-  const [taskState, setTaskState] = useState(initialState);
   const [assignFor, setAssignFor] = useState<Task | null>(null);
+  // Subscribe to taskAssignments so the table re-renders when assignments change
+  const liveAssignments = useDhStore((s) => s.taskAssignments);
+  // Local editable state per task: actualStartDate, utilizedHours, stage
+  const [actuals, setActuals] = useState<Record<string, { actualStartDate: string; utilizedHours: string; stage: TaskStage }>>(() => {
+    const m: Record<string, { actualStartDate: string; utilizedHours: string; stage: TaskStage }> = {};
+    project.tasks.forEach((t) => {
+      m[t.id] = {
+        actualStartDate: t.actualStartDate ?? "",
+        utilizedHours: t.utilizedHours != null ? String(t.utilizedHours) : "",
+        stage: (t.stage as TaskStage) ?? "Not Started",
+      };
+    });
+    return m;
+  });
 
   const teamPool = useMemo(() => {
     const ids = Array.from(new Set([project.pmId, project.tlId, ...project.teamIds, ...shadowTeamIds]));
-    return ids.map(id => {
+    return ids.map((id) => {
       const person = getPerson(id);
-      const isProjectTeam = project.pmId === id || project.tlId === id || project.teamIds.includes(id);
-      const isShadowTeam = shadowTeamIds.includes(id);
-      return { person, isProjectTeam, isShadowTeam };
+      return { person, isProjectTeam: project.pmId === id || project.tlId === id || project.teamIds.includes(id), isShadowTeam: shadowTeamIds.includes(id) };
     });
   }, [project, shadowTeamIds]);
 
-  const dhStatusCls = (s: DhTaskStatus) => ({
-    "Ongoing": "border-info/30 bg-info/10 text-info",
-    "Completed": "border-success/30 bg-success/10 text-success",
-    "On Hold Internally": "border-warning/40 bg-warning/15 text-warning-foreground",
-    "On Hold Client": "border-warning/40 bg-warning/15 text-warning-foreground",
-    "After Release": "border-muted-foreground/30 bg-muted text-muted-foreground",
-  }[s]);
+  function commitActuals(taskId: string) {
+    const a = actuals[taskId];
+    if (!a) return;
+    dhStore.updateTaskActuals(project.id, taskId, {
+      actualStartDate: a.actualStartDate || undefined,
+      utilizedHours: a.utilizedHours ? Number(a.utilizedHours) : undefined,
+      stage: a.stage,
+    });
+  }
+
+  // Derive actualEndDate from actualStartDate + estimatedHours (skip weekends)
+  function deriveActualEndDate(taskId: string, estHours: number): string {
+    const a = actuals[taskId];
+    if (!a?.actualStartDate) return "—";
+    const days = Math.ceil(estHours / 8);
+    return addWorkingDaysFromDate(a.actualStartDate, days);
+  }
 
   return (
     <>
@@ -997,70 +1112,104 @@ function DhTasksTab({ project }: { project: Project }) {
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
-              <th className="px-3 py-2 font-medium">Task ID</th>
-              <th className="px-3 py-2 font-medium">Task Name</th>
-              <th className="px-3 py-2 font-medium">Activity Name</th>
-              <th className="px-3 py-2 font-medium">Assigned Resources</th>
-              <th className="px-3 py-2 font-medium">Status</th>
-              <th className="px-3 py-2 font-medium">Estimated Hours</th>
-              <th className="px-3 py-2 font-medium">Actual Hours</th>
-              <th className="px-3 py-2 text-right font-medium">Actions</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">Service ID</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">Service Name</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">WBS Start Date</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">WBS End Date</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">Est. Hours</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">Actual Start Date</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">Actual End Date</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">Utilized Hours</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">Stage</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">Assigned Resources</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
+            {project.tasks.length === 0 && (
+              <tr>
+                <td colSpan={11} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                  No services — create this project via Assign WBS to populate tasks.
+                </td>
+              </tr>
+            )}
             {project.tasks.map((t) => {
-              const meta = getTaskMeta(project, t);
-              const st = taskState[t.id] || { status: mapTaskStatus(t.status) };
-              const assignment = dhStore.getTaskAssignment(project.id, t.id);
-              const assignees = assignment.assigneeIds.map(getPerson);
-              const activityName = getActivityName(t);
-              
+              const estHrs = t.estimatedHours ?? 0;
+              const a = actuals[t.id] ?? { actualStartDate: "", utilizedHours: "", stage: "Not Started" as TaskStage };
+              // Use liveAssignments from store for reactivity — falls back to getTaskAssignment for seed data
+              const liveIds = (liveAssignments[t.id]?.assigneeIds ?? dhStore.getTaskAssignment(project.id, t.id).assigneeIds)
+                .filter(Boolean); // remove any empty/falsy ids
+              const assigneeNames = liveIds.map((id) => getPerson(id).name).filter(Boolean);
+              const actualEnd = deriveActualEndDate(t.id, estHrs);
+
               return (
                 <tr key={t.id} className="hover:bg-accent/30">
-                  <td className="px-3 py-2.5 font-mono text-[11px] text-muted-foreground">{meta.taskCode}</td>
-                  <td className="px-3 py-2.5 font-medium">{t.title}</td>
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">{activityName}</td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex flex-wrap gap-1.5">
-                      {assignees.map((a) => {
-                        const isShadow = shadowTeamIds.includes(a.id);
-                        return (
-                          <span
-                            key={a.id}
-                            className={cn(
-                              "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium shadow-sm",
-                              isShadow
-                                ? "bg-purple-50 text-purple-700 border-purple-200"
-                                : "bg-blue-50 text-blue-700 border-blue-200"
-                            )}
-                          >
-                            <Avatar name={a.name} size={14} />
-                            <span>{a.name}</span>
-                            <span className="text-[8px] text-muted-foreground uppercase font-semibold">
-                              {isShadow ? "Shadow" : "Project"}
-                            </span>
-                          </span>
-                        );
-                      })}
-                      {assignees.length === 0 && (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </div>
+                  {/* Service ID */}
+                  <td className="px-3 py-2.5 font-mono text-[11px] text-muted-foreground whitespace-nowrap">
+                    {t.serviceId ?? t.id.slice(-6).toUpperCase()}
                   </td>
+                  {/* Service Name */}
+                  <td className="px-3 py-2.5 font-medium max-w-[180px] truncate" title={t.title}>
+                    {t.title}
+                  </td>
+                  {/* WBS Start Date */}
+                  <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                    {t.wbsStartDate ? new Date(t.wbsStartDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                  </td>
+                  {/* WBS End Date */}
+                  <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                    {t.wbsEndDate ? new Date(t.wbsEndDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                  </td>
+                  {/* Estimated Hours */}
+                  <td className="px-3 py-2.5 tabular-nums text-muted-foreground">
+                    {estHrs > 0 ? `${estHrs} hrs` : "—"}
+                  </td>
+                  {/* Actual Start Date — PM editable */}
                   <td className="px-3 py-2.5">
-                    <select value={st.status}
+                    <input
+                      type="date"
+                      value={a.actualStartDate}
+                      onChange={(e) => setActuals((prev) => ({ ...prev, [t.id]: { ...prev[t.id], actualStartDate: e.target.value } }))}
+                      onBlur={() => commitActuals(t.id)}
+                      className="h-7 rounded-md border border-input bg-card px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </td>
+                  {/* Actual End Date — auto-computed */}
+                  <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                    {actualEnd !== "—" ? new Date(actualEnd).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                  </td>
+                  {/* Utilized Hours — PM editable */}
+                  <td className="px-3 py-2.5">
+                    <input
+                      type="number"
+                      min={0}
+                      value={a.utilizedHours}
+                      onChange={(e) => setActuals((prev) => ({ ...prev, [t.id]: { ...prev[t.id], utilizedHours: e.target.value } }))}
+                      onBlur={() => commitActuals(t.id)}
+                      placeholder="0"
+                      className="h-7 w-20 rounded-md border border-input bg-card px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </td>
+                  {/* Stage — editable select */}
+                  <td className="px-3 py-2.5">
+                    <select
+                      value={a.stage}
                       onChange={(e) => {
-                        const v = e.target.value as DhTaskStatus;
-                        setTaskState((s) => ({ ...s, [t.id]: { ...s[t.id], status: v } }));
-                        toast.success(`Status updated`, { description: `${t.title} → ${v}` });
+                        const v = e.target.value as TaskStage;
+                        setActuals((prev) => ({ ...prev, [t.id]: { ...prev[t.id], stage: v } }));
+                        dhStore.updateTaskActuals(project.id, t.id, { stage: v });
+                        toast.success("Stage updated", { description: `${t.title} → ${v}` });
                       }}
-                      className={cn("h-7 rounded-full border px-2 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        dhStatusCls(st.status))}>
-                      {DH_TASK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      className={cn("h-7 rounded-full border px-2 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring", stageCls(a.stage))}
+                    >
+                      {TASK_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </td>
-                  <td className="px-3 py-2.5 tabular-nums text-muted-foreground">{meta.estHours} hrs</td>
-                  <td className="px-3 py-2.5 tabular-nums font-medium text-gray-800">{meta.actualHours} hrs</td>
+                  {/* Assigned Resources — avatar stack (display only, hover for names) */}
+                  <td className="px-3 py-2.5">
+                    <AvatarStack names={assigneeNames} />
+                  </td>
+                  {/* Actions */}
                   <td className="px-3 py-2.5 text-right">
                     <button onClick={() => setAssignFor(t)}
                       className="inline-flex items-center gap-1 rounded-md border border-input bg-card px-2 py-1 text-[11px] hover:bg-accent">
@@ -1076,7 +1225,7 @@ function DhTasksTab({ project }: { project: Project }) {
 
       {assignFor && (
         <AssignTaskModal task={assignFor} pool={teamPool} project={project}
-          selected={dhStore.getTaskAssignment(project.id, assignFor.id).assigneeIds}
+          selected={liveAssignments[assignFor.id]?.assigneeIds ?? dhStore.getTaskAssignment(project.id, assignFor.id).assigneeIds}
           onClose={() => setAssignFor(null)}
           onSave={(ids) => {
             dhStore.assignResourcesToTask(project.id, assignFor.id, ids);
